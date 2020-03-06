@@ -260,18 +260,94 @@ class OutputsHandler(object):
             return self.queues[name].put(item, **kwargs)
 
 
+class ProcessTask(object):
+    def __init__(self, name=None, init=True, kwargs={}):
+        self.name = name
+        self.kwargs = kwargs
+        self.stop_event = Event()
+        self.events = {}
+        self.locks = {}
+
+        self.inputs = None
+        self.outputs = None
+
+        if init:
+            self.construct()
+
+    # Construct Methods
+    def construct(self):
+        self.create_io()
+
+    # IO
+    def create_io(self):
+        self.inputs = InputsHandler(name=self.name)
+        self.outputs = OutputsHandler(name=self.name)
+
+        self.inputs.create_queue("SelfStop")
+
+    # Multiprocess Event Methods
+    def create_event(self, name):
+        self.events[name] = Event()
+        return self.events[name]
+
+    def set_event(self, name, event):
+        self.events[name] = event
+
+    # Multiprocess Lock Methods
+    def create_lock(self, name):
+        self.locks[name] = Lock()
+        return self.locks[name]
+
+    def set_lock(self, name, lock):
+        self.locks[name] = lock
+
+    # Execution Methods
+    def run(self, **kwargs):
+        self.setup()
+        self.task(**kwargs)
+
+    def start(self, **kwargs):
+        self.setup()
+        self.task_loop(**kwargs)
+
+    def restart(self, **kwargs):
+        self.stop_event.clear()
+        self.start(**kwargs)
+
+    def stop(self):
+        self.stop_event.set()
+
+    # Task Methods
+    def setup(self):
+        pass
+
+    def task(self, name=None):
+        pass
+
+    def task_loop(self, **kwargs):
+        while not self.stop_event.is_set():
+            if not self.inputs.get_input_item("SelfStop"):
+                self.task(**kwargs)
+
+
 class SeparateProcess(object):
-    def __init__(self, target=None, name=None, daemon=None, kwargs={}):
+    def __init__(self, target=None, name=None, daemon=None, init=False, kwargs={}):
         self.name = name
         self.target = target
         self.target_kwargs = kwargs
         self.daemon = daemon
 
-        self.process = Process(target=self.target, name=self.name, daemon=self.daemon, kwargs=self.target_kwargs)
+        self.process = None
+
+        if init:
+            self.construct()
 
     @property
     def is_alive(self):
         return self.process.is_alive()
+
+    def construct(self, target=None, daemon=None, **kwargs):
+        self.create_process(target, daemon, **kwargs)
 
     def create_process(self, target=None, daemon=None, **kwargs):
         if target is not None:
@@ -306,73 +382,22 @@ class SeparateProcess(object):
             self.process.close()
 
 
-class ProcessingTask(object):
-    def __init__(self, name=None):
-        self.name = None
-        self.stop_event = Event()
-        self.events = {}
-        self.locks = {}
-
-        self.inputs = InputsHandler(name=name)
-        self.outputs = OutputsHandler(name=name)
-
-        self.inputs.create_queue("SelfStop")
-
-    def create_event(self, name):
-        self.events[name] = Event()
-
-    def set_event(self, name, event):
-        self.events[name] = event
-
-    def create_lock(self, name):
-        self.locks[name] = Lock()
-
-    def set_lock(self, name, lock):
-        self.locks[name] = lock
-
-    def run(self, **kwargs):
-        self.setup()
-        self.task(**kwargs)
-
-    def start(self, **kwargs):
-        self.setup()
-        self.task_loop(**kwargs)
-
-    def restart(self, **kwargs):
-        self.stop_event.clear()
-        self.start(**kwargs)
-
-    def stop(self):
-        self.stop_event.set()
-
-    def setup(self):
-        pass
-
-    def task(self, name=None):
-        pass
-
-    def task_loop(self, **kwargs):
-        while not self.stop_event.is_set():
-            if not self.inputs.get_input_item("SelfStop"):
-                self.task(**kwargs)
-
-
 class ProcessingUnit(object):
-    DEFAULT_TASK = ProcessingTask
+    DEFAULT_TASK = ProcessTask
 
-    def __init__(self, name=None):
+    def __init__(self, name=None, init=True):
         self.name = name
         self.is_multiprocessing = False
         self._is_processing = False
-
-        self.inputs = InputsHandler(name=name)
-        self.outputs = OutputsHandler(name=name)
 
         self.task = None
         self.task_start = None
 
         self.processing_pool = None
         self.process = None
+
+        if init:
+            self.construct()
 
     @property
     def is_processing(self):
@@ -381,6 +406,39 @@ class ProcessingUnit(object):
         else:
             return self._is_processing
 
+    @property
+    def inputs(self):
+        if self.task is not None:
+            return self.task.inputs
+        else:
+            return None
+
+    @inputs.setter
+    def inputs(self, value):
+        if self.task is not None:
+            self.task.inputs = value
+        else:
+            raise NameError
+
+    @property
+    def outputs(self):
+        if self.task is not None:
+            return self.task.outputs
+        else:
+            return None
+
+    @outputs.setter
+    def outputs(self, value):
+        if self.task is not None:
+            self.task.outputs = value
+        else:
+            raise NameError
+
+    # Construction Methods
+    def construct(self):
+        pass
+
+    # Task Methods
     def create_task(self, **kwargs):
         self.task = self.DEFAULT_TASK(**kwargs)
         self.task_start = self.task.start
@@ -389,18 +447,24 @@ class ProcessingUnit(object):
         self.task = task
         self.task_start = self.task.start
 
-    def create_process(self, target=None, name=None, daemon=None, kwargs={}):
-        if target is not None:
-            self.task_start = target
+    # IO
+    def create_io(self):
+        self.task.create_io()
+
+    # Process Methods
+    def create_process(self, task_start=None, name=None, daemon=None, kwargs={}):
+        if task_start is not None:
+            self.task_start = task_start
         else:
-            target = self.task_start
+            task_start = self.task_start
         if name is None:
             name = self.name
-        self.process = SeparateProcess(target=target, name=name, daemon=daemon, kwargs=kwargs)
+        self.process = SeparateProcess(target=task_start, name=name, daemon=daemon, kwargs=kwargs)
 
     def set_process(self, process):
         self.process = process
 
+    # Execution Methods
     def setup(self):
         pass
 
@@ -411,6 +475,15 @@ class ProcessingUnit(object):
     def start(self):
         self.setup()
         self.process.start()
+
+
+class ProcessingCluster(ProcessingUnit):
+    def __init__(self, name=None, init=True):
+        super().__init__(name=name, init=False)
+
+        if init:
+            self.construct()
+
 
 
 if __name__ == "__main__":
