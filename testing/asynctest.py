@@ -32,6 +32,43 @@ async def task3():
     return "Returned"
 
 
+async def task_looping():
+    a = asyncio.create_task(taska())
+    b = asyncio.create_task(taskb())
+    c = asyncio.create_task(taskc())
+
+    await a, b, c
+
+
+async def taska():
+    for i in range(10):
+        packed = asyncio.create_task(subtask(i))
+        await packed
+        print("a looped")
+
+
+async def taskb():
+    for i in range(10):
+        packed = asyncio.create_task(taskblock())
+        await packed
+        print("b looped")
+
+
+async def taskc():
+    for i in range(10):
+        packed = asyncio.create_task(subtask(i))
+        await packed
+        print("c looped")
+
+
+async def taskblock():
+    print("io started")
+    for i in range(3):
+        print("blocked")
+        await asyncio.sleep(1)
+        print("check again")
+
+
 async def wait(t):
     time.sleep(t)
     await asyncio.sleep(1)
@@ -47,7 +84,7 @@ async def asyncwait(t):
 
 
 async def main():
-    # add tasks to bottom of stack
+    # add tasks to bottom of the stack
     packaged_task1 = asyncio.create_task(task1(5))
     packaged_task2 = asyncio.create_task(task2())
     packaged_task3 = asyncio.create_task(task3())
@@ -55,7 +92,7 @@ async def main():
 
     print(f"started at {time.strftime('%X')}")
 
-    # await.sleep() runs whole stack
+    # await.sleep() runs the whole stack
     await asyncwait(2)
     # await [task] runs next task in stack, until whole stack is done once or until [task] fully executes while others in stack do not required to finish
     await packaged_task3
@@ -76,4 +113,6 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    # asyncio.run(main())
+    asyncio.run(task_looping())
+    print("done")
