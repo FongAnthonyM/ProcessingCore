@@ -18,6 +18,7 @@ import multiprocessing
 from multiprocessing import Process, Pool, Lock, Event, Queue, Pipe
 import queue
 import warnings
+import time
 
 # Downloaded Libraries #
 
@@ -80,12 +81,59 @@ class BroadcastPipe(object):
         for connection in self.send_connections.values():
             connection.send(obj)
 
-    def recv(self, name, poll=True, timeout=None):
+    def send_bytes(self, obj, **kwargs):
+        for connection in self.send_connections.values():
+            connection.send_bytes(obj, **kwargs)
+
+    def recv(self, name, poll=True, timeout=0.0):
         connection = self.recv_connections[name]
         if not poll or connection.poll(timeout=timeout):
             return connection.recv()
         else:
             return None
+
+    def recv_wait(self, name, timeout=0.0, interval=0.0):
+        connection = self.recv_connections[name]
+        start_time = time.perf_counter()
+        while not connection.poll():
+            time.sleep(interval)
+            if (time.perf_counter() - start_time) >= timeout:
+                warnings.warn()
+        return connection.recv()
+
+    async def recv_wait_async(self, name, timeout=0.0, interval=0.0):
+        connection = self.recv_connections[name]
+        start_time = time.perf_counter()
+        while not connection.poll():
+            await asyncio.sleep(interval)
+            if (time.perf_counter() - start_time) >= timeout:
+                warnings.warn()
+        return connection.recv()
+
+    def recv_bytes(self, name, poll=True, timeout=0.0, **kwargs):
+        connection = self.recv_connections[name]
+        if not poll or connection.poll(timeout=timeout):
+            return connection.recv(**kwargs)
+        else:
+            return None
+
+    def recv_bytes_wait(self, name, timeout=0.0, interval=0.0, **kwargs):
+        connection = self.recv_connections[name]
+        start_time = time.perf_counter()
+        while not connection.poll():
+            time.sleep(interval)
+            if (time.perf_counter() - start_time) >= timeout:
+                warnings.warn()
+        return connection.recv_bytes(**kwargs)
+
+    async def recv_bytes_wait_async(self, name, timeout=0.0, interval=0.0, **kwargs):
+        connection = self.recv_connections[name]
+        start_time = time.perf_counter()
+        while not connection.poll():
+            await asyncio.sleep(interval)
+            if (time.perf_counter() - start_time) >= timeout:
+                warnings.warn()
+        return connection.recv_bytes(**kwargs)
 
     def clear_recv(self, name):
         connection = self.recv_connections[name]
@@ -149,15 +197,33 @@ class BroadcastQueue(object):
         return False
 
     # Transmission
-    def put(self, obj, block=False, timeout=None):
+    def put(self, obj, block=False, timeout=0.0):
         for q in self.queues.values():
             try:
                 q.put(obj, block=block, timeout=timeout)
             except queue.Full:
                 pass  # add a warning here
 
-    def get(self, name, block=True, timeout=None):
+    def get(self, name, block=True, timeout=0.0):
         return self.queues[name].get(block=block, timeout=timeout)
+
+    def get_wait(self, name, timeout=0.0, interval=0.0):
+        connection = self.queues[name]
+        start_time = time.perf_counter()
+        while connection.empty():
+            time.sleep(interval)
+            if (time.perf_counter() - start_time) >= timeout:
+                warnings.warn()
+        return connection.get()
+
+    async def get_wait_async(self, name, timeout=0.0, interval=0.0):
+        connection = self.queues[name]
+        start_time = time.perf_counter()
+        while connection.empty():
+            await asyncio.sleep(interval)
+            if (time.perf_counter() - start_time) >= timeout:
+                warnings.warn()
+        return connection.get()
 
 
 class InputsHandler(object):
@@ -215,6 +281,58 @@ class InputsHandler(object):
             return self.safe_pipe_recv(self.pipes[name], **kwargs)
         elif name in self.queues:
             return self.queues[name].get(**kwargs)
+
+    def get_input_item_wait(self, name, timeout=0.0, interval=0.0):
+        if name in self.broadcasters:
+            connection = self.broadcasters[name]
+            start_time = time.perf_counter()
+            while not connection.poll():
+                time.sleep(interval)
+                if (time.perf_counter() - start_time) >= timeout:
+                    warnings.warn()
+            return connection.recv()
+        elif name in self.pipes:
+            connection = self.pipes[name]
+            start_time = time.perf_counter()
+            while not connection.poll():
+                time.sleep(interval)
+                if (time.perf_counter() - start_time) >= timeout:
+                    warnings.warn()
+            return connection.recv()
+        elif name in self.queues:
+            connection = self.queues[name]
+            start_time = time.perf_counter()
+            while connection.empty():
+                time.sleep(interval)
+                if (time.perf_counter() - start_time) >= timeout:
+                    warnings.warn()
+            return connection.get()
+
+    async def get_input_item_wait_async(self, name, timeout=0.0, interval=0.0):
+        if name in self.broadcasters:
+            connection = self.broadcasters[name]
+            start_time = time.perf_counter()
+            while not connection.poll():
+                await asyncio.sleep(interval)
+                if (time.perf_counter() - start_time) >= timeout:
+                    warnings.warn()
+            return connection.recv()
+        elif name in self.pipes:
+            connection = self.pipes[name]
+            start_time = time.perf_counter()
+            while not connection.poll():
+                await asyncio.sleep(interval)
+                if (time.perf_counter() - start_time) >= timeout:
+                    warnings.warn()
+            return connection.recv()
+        elif name in self.queues:
+            connection = self.queues[name]
+            start_time = time.perf_counter()
+            while connection.empty():
+                await asyncio.sleep(interval)
+                if (time.perf_counter() - start_time) >= timeout:
+                    warnings.warn()
+            return connection.get()
 
     @staticmethod
     def safe_pipe_recv(pipe, poll=True, timeout=None):
@@ -280,9 +398,10 @@ class OutputsHandler(object):
 
 class ProcessTask(object):
     # Construction/Destruction
-    def __init__(self, name=None, init=True, kwargs={}):
+    def __init__(self, name=None, allow_setup=True, init=True, kwargs={}):
         self.name = name
         self.kwargs = kwargs
+        self.allow_setup = allow_setup
         self.stop_event = Event()
         self.events = {}
         self.locks = {}
@@ -290,6 +409,8 @@ class ProcessTask(object):
         self.inputs = None
         self.outputs = None
 
+        self._runtime_setup = self.setup
+        self._runtime_task = self.task
         self.async_loop = asyncio.get_event_loop()
 
         if init:
@@ -329,38 +450,184 @@ class ProcessTask(object):
     def task(self, name=None):
         pass
 
-    async def async_task(self, **kwargs):
-        return self.task(**kwargs)
+    async def task_async(self, **kwargs):
+        if kwargs:
+            self.kwargs = kwargs
+        return self._runtime_task(**self.kwargs)
 
     def task_loop(self, **kwargs):
+        if kwargs:
+            self.kwargs = kwargs
         while not self.stop_event.is_set():
             if not self.inputs.get_input_item("SelfStop"):
-                packaged_task = asyncio.create_task(self.async_task(**kwargs))
+                self._runtime_task(**self.kwargs)
+            else:
+                self.stop_event.set()
+
+    async def task_loop_async(self, **kwargs):
+        while not self.stop_event.is_set():
+            if not self.inputs.get_input_item("SelfStop"):
+                packaged_task = asyncio.create_task(self.task_async(**kwargs))
                 await packaged_task
             else:
                 self.stop_event.set()
 
     # Execution
     def run(self, **kwargs):
-        self.setup()
-        self.task(**kwargs)
+        if self.allow_setup:
+            self._runtime_setup()
+
+        if kwargs:
+            self.kwargs = kwargs
+        self._runtime_task(**self.kwargs)
+
+    async def run_async_coro(self, **kwargs):
+        if self.allow_setup:
+            self._runtime_setup()
+
+        await self.task_async(**kwargs)
+
+    def run_async(self, **kwargs):
+        asyncio.run(self.run_async_coro(**kwargs))
+
+    def run_async_await(self, **kwargs):
+        await self.run_async_coro(**kwargs)
+
+    def run_async_task(self, **kwargs):
+        return asyncio.create_task(self.run_async_coro(**kwargs))
 
     def start(self, **kwargs):
-        self.setup()
-        # asyncio.run(goes here)
+        if self.allow_setup:
+            self._runtime_setup()
         self.task_loop(**kwargs)
 
-    def restart(self, **kwargs):
+    async def start_async_coro(self, **kwargs):
+        if self.allow_setup:
+            self._runtime_setup()
+        await self.task_loop_async(**kwargs)
+
+    def start_async(self, **kwargs):
+        asyncio.run(self.start_async_coro(**kwargs))
+
+    def start_async_await(self, **kwargs):
+        await self.start_async_coro(**kwargs)
+
+    def start_async_task(self, **kwargs):
+        return asyncio.create_task(self.start_async_coro(**kwargs))
+
+    def reset(self):
         self.stop_event.clear()
-        self.start(**kwargs)
 
     def stop(self):
         self.stop_event.set()
 
 
+class MultiUnitTask(ProcessTask):
+    # Construction/Destruction
+    def __init__(self, name=None, allow_setup=True, init=True, kwargs={}):
+        super().__init__(name, allow_setup, init=False, kwargs=kwargs)
+
+        self._execution_order = []
+        self.units = {}
+
+        if init:
+            self.construct()
+
+    @property
+    def execution_order(self):
+        return self._execution_order
+
+    @execution_order.setter
+    def execution_order(self, value):
+        if len(value) == len(self.units):
+            self._execution_order.clear()
+            self._execution_order.extend(value)
+        else:
+            warnings.warn()
+
+    def keys(self):
+        return self.units.keys()
+
+    def values(self):
+        return self.units.values()
+
+    def items(self):
+        return self.units.items()
+
+    def append(self, name, unit, setup=False, process=False, kwargs={}):
+        self.units[name] = {"unit": unit, "setup": setup, "process": process, "kwargs": kwargs}
+
+    def pop(self, name):
+        return self.units.pop(name)
+
+    def clear(self):
+        self.units.clear()
+
+    def setup(self):
+        if self.execution_order is None:
+            names = self.units
+        else:
+            names = self.execution_order
+        for name in names:
+            unit = self.units[name]
+            if unit["setup"]:
+                unit.allow_setup = False
+                unit.setup()
+
+    def task(self, name=None, asyn=""):
+        if not asyn:
+            self.unit_run()
+        elif asyn == "await":
+            self.unit_async_await()
+        else:
+            self.unit_async_task()
+
+    def unit_run(self):
+        if self.execution_order is None:
+            names = self.units
+        else:
+            names = self.execution_order
+
+        for name in names:
+            unit = self.units[name]
+            if unit["process"]:
+                unit.start_async_await(**unit["kwargs"])
+            else:
+                unit.run_async_await(**unit["kwargs"])
+
+    def unit_async_await(self):
+        if self.execution_order is None:
+            names = self.units
+        else:
+            names = self.execution_order
+
+        for name in names:
+            unit = self.units[name]
+            if unit["process"]:
+                unit.start_async_await(**unit["kwargs"])
+            else:
+                unit.run_async_await(**unit["kwargs"])
+
+    def unit_async_task(self):
+        tasks = []
+        if self.execution_order is None:
+            names = self.units
+        else:
+            names = self.execution_order
+
+        for name in names:
+            unit = self.units[name]
+            if unit["process"]:
+                tasks.append(unit.start_async_task(**unit["kwargs"]))
+            else:
+                tasks.append(unit.run_async_task(**unit["kwargs"]))
+        for task in tasks:
+            await task
+
+
 class SeparateProcess(object):
     # Construction/Destruction
-    def __init__(self, target=None, name=None, daemon=None, init=False, kwargs={}):
+    def __init__(self, target=None, name=None, daemon=False, init=False, kwargs={}):
         self._name = name
         self._daemon = daemon
         self._target = target
@@ -440,11 +707,11 @@ class SeparateProcess(object):
         self._target_kwargs = value._kwargs
 
     # Constructors
-    def construct(self, target=None, daemon=None, **kwargs):
+    def construct(self, target=None, daemon=False, **kwargs):
         self.create_process(target, daemon, **kwargs)
 
     # Process
-    def create_process(self, target=None, daemon=None, **kwargs):
+    def create_process(self, target=None, daemon=False, **kwargs):
         if target is not None:
             self.target = target
         if kwargs:
@@ -485,13 +752,15 @@ class ProcessingUnit(object):
     DEFAULT_TASK = ProcessTask
 
     # Construction/Destruction
-    def __init__(self, name=None, init=True):
+    def __init__(self, name=None, allow_setup=True, separate_process=False, init=True):
         self.name = name
-        self.is_multiprocessing = False
+        self.separate_process = separate_process
         self._is_processing = False
+        self.allow_setup = allow_setup
 
+        self._runtime_setup = self.setup
         self.task = None
-        self.task_start = None
+        self._runtime_task = None
 
         self.processing_pool = None
         self.process = None
@@ -501,10 +770,9 @@ class ProcessingUnit(object):
 
     @property
     def is_processing(self):
-        if self.is_multiprocessing:
-            return self.process.is_alive
-        else:
-            return self._is_processing
+        if self.process is not None and self.separate_process:
+            self._is_processing = self.process.is_alive
+        return self._is_processing
 
     @property
     def inputs(self):
@@ -539,42 +807,91 @@ class ProcessingUnit(object):
         pass
 
     # Task
-    def create_task(self, **kwargs):
+    def default_task(self, **kwargs):
         self.task = self.DEFAULT_TASK(**kwargs)
-        self.task_start = self.task.start
 
     def set_task(self, task):
         self.task = task
-        self.task_start = self.task.start
 
     # IO
     def create_io(self):
         self.task.create_io()
 
     # Process
-    def create_process(self, task_start=None, name=None, daemon=None, kwargs={}):
-        if task_start is not None:
-            self.task_start = task_start
-        else:
-            task_start = self.task_start
+    def create_process(self, name=None, daemon=False, kwargs={}):
         if name is None:
             name = self.name
-        self.process = SeparateProcess(target=task_start, name=name, daemon=daemon, kwargs=kwargs)
+        self.process = SeparateProcess(name=name, daemon=daemon, kwargs=kwargs)
 
     def set_process(self, process):
         self.process = process
 
-    # Execution
+    # Setup
     def setup(self):
         pass
 
-    def run(self, **kwargs):
-        self.setup()
-        self.task.run(**kwargs)
+    def use_task_setup(self):
+        self.task.allow_setup = False
+        self._runtime_setup = self.task.setup
 
-    def start(self):
-        self.setup()
-        self.process.start()
+    # Execution
+    def run(self, **kwargs):
+        if self.allow_setup:
+            self._runtime_setup()
+
+        if self.separate_process:
+            self.process.create_process(self.task.run, kwargs=kwargs)
+            self.process.start()
+        else:
+            self.task.run(**kwargs)
+
+    async def run_async_coro(self, **kwargs):
+        if self.allow_setup:
+            self._runtime_setup()
+
+        if self.separate_process:
+            self.process.create_process(self.task.run_async_coro, kwargs=kwargs)
+            self.process.start()
+        else:
+            self.task.run_async_coro(**kwargs)
+
+    def run_async(self, **kwargs):
+        asyncio.run(self.run_async_coro(**kwargs))
+
+    def run_async_await(self, **kwargs):
+        await self.run_async_coro(**kwargs)
+
+    def run_async_task(self, **kwargs):
+        return asyncio.create_task(self.run_async_coro(**kwargs))
+
+    def start(self, **kwargs):
+        if self.allow_setup:
+            self._runtime_setup()
+
+        if self.separate_process:
+            self.process.create_process(self.task.start, kwargs=kwargs)
+            self.process.start()
+        else:
+            self.task.start(**kwargs)
+
+    async def start_async_coro(self, **kwargs):
+        if self.allow_setup:
+            self._runtime_setup()
+
+        if self.separate_process:
+            self.process.create_process(self.task.start_async_coro, kwargs=kwargs)
+            self.process.start()
+        else:
+            self.task.start_async_coro(**kwargs)
+
+    def start_async(self, **kwargs):
+        asyncio.run(self.start_async_coro(**kwargs))
+
+    def start_async_wait(self, **kwargs):
+        await self.start_async_coro(**kwargs)
+
+    def start_async_task(self, **kwargs):
+        return asyncio.create_task(self.start_async_coro(**kwargs))
 
 
 class ProcessingCluster(ProcessingUnit):
@@ -582,7 +899,45 @@ class ProcessingCluster(ProcessingUnit):
         super().__init__(name=name, init=False)
 
         if init:
-            self.construct()
+            self.construct(name)
+
+    @property
+    def execution_order(self):
+        return self.task.execution_order
+
+    @execution_order.setter
+    def execution_order(self, value):
+        self.task.execution_order = value
+
+    @property
+    def units(self):
+        return self.task.units
+
+    @units.setter
+    def units(self, value):
+        self.task.units = value
+
+    def construct(self, name=None):
+        self.set_task(MultiUnitTask(name=name))
+
+    def keys(self):
+        return self.task.keys()
+
+    def values(self):
+        return self.task.values()
+
+    def items(self):
+        return self.task.items()
+
+    def append(self, name, unit, setup=False, process=False):
+        # {"unit": unit, "setup": setup, "process": process}
+        self.task.units[name] = {"unit": unit, "setup": setup, "process": process}
+
+    def pop(self, name):
+        return self.task.pop(name)
+
+    def clear(self):
+        self.task.clear()
 
 
 # Main #

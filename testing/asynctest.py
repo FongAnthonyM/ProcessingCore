@@ -33,11 +33,14 @@ async def task3():
 
 
 async def task_looping():
-    a = asyncio.create_task(taska())
-    b = asyncio.create_task(taskb())
-    c = asyncio.create_task(taskc())
+    a = asyncio.create_task(taska())  # Add to the stack, run, run
+    b = asyncio.create_task(taskb())  # Add to the stack, start, skip
+    c = asyncio.create_task(taskc())  # Add to the stack, run, run
 
-    await a, b, c
+    # Need to await each one individually
+    await a
+    await b
+    await c
 
 
 async def taska():
@@ -116,3 +119,5 @@ if __name__ == "__main__":
     # asyncio.run(main())
     asyncio.run(task_looping())
     print("done")
+
+
