@@ -240,7 +240,7 @@ class InputsHandler(object):
         return self.inputs[item]
 
     # Queues
-    def create_queue(self, name, maxsize=None):
+    def create_queue(self, name, maxsize=0):
         self.inputs[name] = Queue(maxsize=maxsize)
         self.queues[name] = self.inputs[name]
         return self.inputs[name]
@@ -378,7 +378,7 @@ class OutputsHandler(object):
         return self.outputs[item]
 
     # Queues
-    def create_queue(self, name, maxsize=None):
+    def create_queue(self, name, maxsize=0):
         self.outputs[name] = Queue(maxsize=maxsize)
         self.queues[name] = self.outputs[name]
         return self.outputs[name]
