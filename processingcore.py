@@ -245,9 +245,14 @@ class InputsHandler(object):
         self.queues[name] = self.inputs[name]
         return self.inputs[name]
 
-    def set_queue(self, name, q):
+    def add_queue(self, name, q):
         self.inputs[name] = q
         self.queues[name] = self.inputs[name]
+
+    def clear_queues(self):
+        for q in self.queues:
+            del self.inputs[q]
+        self.queues.clear()
 
     # Pipes
     def create_pipe(self, name, duplex=True):
@@ -255,9 +260,14 @@ class InputsHandler(object):
         self.pipes[name] = self.inputs[name]
         return output
 
-    def set_pipe(self, name, pipe):
+    def add_pipe(self, name, pipe):
         self.inputs[name] = pipe
         self.pipes[name] = self.inputs[name]
+
+    def clear_pipes(self):
+        for pipe in self.pipes:
+            del self.inputs[pipe]
+        self.pipes.clear()
 
     # Broadcasters
     def create_broadcast(self, name):
@@ -266,12 +276,24 @@ class InputsHandler(object):
         self.broadcasters[name] = self.inputs[name]
         return broadcaster
 
-    def set_broadcast(self, name, broadcaster):
+    def add_broadcast(self, name, broadcaster):
         if isinstance(broadcaster, BroadcastPipe):
             self.inputs[name] = broadcaster.recv_connections(name)
         else:
             self.inputs[name] = broadcaster
         self.broadcasters = self.inputs[name]
+
+    def clear_broadcasts(self):
+        for broadcast in self.broadcasters:
+            del self.inputs[broadcast]
+        self.broadcasters.clear()
+
+    # All
+    def clear_all(self):
+        self.inputs.clear()
+        self.queues.clear()
+        self.pipes.clear()
+        self.broadcasters.clear()
 
     # Transmission
     def get_item(self, name, **kwargs):
@@ -361,9 +383,14 @@ class OutputsHandler(object):
         self.queues[name] = self.outputs[name]
         return self.outputs[name]
 
-    def set_queue(self, name, q):
+    def add_queue(self, name, q):
         self.outputs[name] = q
         self.queues[name] = self.outputs[name]
+
+    def clear_queues(self):
+        for q in self.queues:
+            del self.outputs[q]
+        self.queues.clear()
 
     # Pipes
     def create_pipe(self, name, duplex=True):
@@ -371,9 +398,14 @@ class OutputsHandler(object):
         self.pipes[name] = self.outputs[name]
         return input_
 
-    def set_pipe(self, name, pipe):
+    def add_pipe(self, name, pipe):
         self.outputs[name] = pipe
         self.pipes[name] = self.outputs[name]
+
+    def clear_pipes(self):
+        for pipe in self.pipes:
+            del self.outputs[pipe]
+        self.pipes.clear()
 
     # Broadcasters
     def create_broadcast(self, name):
@@ -382,9 +414,21 @@ class OutputsHandler(object):
         self.broadcasters[name] = self.outputs[name]
         return broadcaster
 
-    def set_broadcast(self, name, broadcaster):
+    def add_broadcast(self, name, broadcaster):
         self.outputs[name] = broadcaster
         self.broadcasters = self.outputs[name]
+
+    def clear_broadcasts(self):
+        for broadcast in self.broadcasters:
+            del self.outputs[broadcast]
+        self.broadcasters.clear()
+
+    # All
+    def clear_all(self):
+        self.outputs.clear()
+        self.queues.clear()
+        self.pipes.clear()
+        self.broadcasters.clear()
 
     # Transmission
     def send_item(self, name, item, **kwargs):
@@ -394,6 +438,8 @@ class OutputsHandler(object):
             return self.pipes[name].send(item, **kwargs)
         elif name in self.queues:
             return self.queues[name].put(item, **kwargs)
+        else:
+            warnings.warn()
 
 
 class ProcessTask(object):
