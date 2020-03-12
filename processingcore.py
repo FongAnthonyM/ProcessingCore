@@ -795,7 +795,7 @@ class ProcessingUnit(object):
     DEFAULT_TASK = ProcessTask
 
     # Construction/Destruction
-    def __init__(self, name=None, allow_setup=True, separate_process=False, init=True):
+    def __init__(self, name=None, allow_setup=True, separate_process=False, init=True, **kwargs):
         self.name = name
         self.separate_process = separate_process
         self._is_processing = False
@@ -809,7 +809,7 @@ class ProcessingUnit(object):
         self.process = None
 
         if init:
-            self.construct(name=name)
+            self.construct(name=name, **kwargs)
 
     @property
     def is_processing(self):
@@ -846,8 +846,9 @@ class ProcessingUnit(object):
             raise NameError
 
     # Constructors
-    def construct(self, name=None):
-        pass
+    def construct(self, name=None, **kwargs):
+        if self.separate_process:
+            self.new_process(self, name=name, **kwargs)
 
     # Task
     def set_task(self, task):
@@ -858,7 +859,7 @@ class ProcessingUnit(object):
         self.task.create_io()
 
     # Process
-    def create_process(self, name=None, daemon=False, kwargs={}):
+    def new_process(self, name=None, daemon=False, kwargs={}):
         if name is None:
             name = self.name
         self.process = SeparateProcess(name=name, daemon=daemon, kwargs=kwargs)
@@ -969,7 +970,8 @@ class ProcessingCluster(ProcessingUnit):
     def units(self, value):
         self.task.units = value
 
-    def construct(self, name=None):
+    def construct(self, name=None, **kwargs):
+        super().construct(name=name, **kwargs)
         self.set_task(MultiUnitTask(name=name))
 
     def keys(self):
