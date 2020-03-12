@@ -274,7 +274,7 @@ class InputsHandler(object):
         self.broadcasters = self.inputs[name]
 
     # Transmission
-    def get_input_item(self, name, **kwargs):
+    def get_item(self, name, **kwargs):
         if name in self.broadcasters:
             return self.safe_pipe_recv(self.broadcasters[name], **kwargs)
         elif name in self.pipes:
@@ -282,7 +282,7 @@ class InputsHandler(object):
         elif name in self.queues:
             return self.queues[name].get(**kwargs)
 
-    def get_input_item_wait(self, name, timeout=0.0, interval=0.0):
+    def get_item_wait(self, name, timeout=0.0, interval=0.0):
         if name in self.broadcasters:
             connection = self.broadcasters[name]
             start_time = time.perf_counter()
@@ -308,7 +308,7 @@ class InputsHandler(object):
                     warnings.warn()
             return connection.get()
 
-    async def get_input_item_wait_async(self, name, timeout=0.0, interval=0.0):
+    async def get_item_wait_async(self, name, timeout=0.0, interval=0.0):
         if name in self.broadcasters:
             connection = self.broadcasters[name]
             start_time = time.perf_counter()
@@ -387,7 +387,7 @@ class OutputsHandler(object):
         self.broadcasters = self.outputs[name]
 
     # Transmission
-    def send_output_item(self, name, item, **kwargs):
+    def send_item(self, name, item, **kwargs):
         if name in self.broadcasters:
             return self.broadcasters[name].send(item, **kwargs)
         elif name in self.pipes:
