@@ -941,9 +941,17 @@ class ProcessingUnit(object):
     def start_async_task(self, **kwargs):
         return asyncio.create_task(self.start_async_coro(**kwargs))
 
+    def stop(self):
+        if self.separate_process:
+            self.task.stop()
+
     def join(self):
         if self.separate_process:
             self.process.join()
+
+    def terminate(self):
+        if self.separate_process:
+            self.process.terminate()
 
 
 class ProcessingCluster(ProcessingUnit):
