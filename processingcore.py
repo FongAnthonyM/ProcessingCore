@@ -626,6 +626,8 @@ class MultiUnitTask(ProcessTask):
 
 
 class SeparateProcess(object):
+    available_cpus = multiprocessing.cpu_count()
+
     # Construction/Destruction
     def __init__(self, target=None, name=None, daemon=False, init=False, kwargs={}):
         self._name = name
@@ -729,6 +731,9 @@ class SeparateProcess(object):
 
     def start(self):
         self.process.start()
+
+    def join(self):
+        self.process.join()
 
     def restart(self):
         if isinstance(self.process, Process):
@@ -892,6 +897,10 @@ class ProcessingUnit(object):
 
     def start_async_task(self, **kwargs):
         return asyncio.create_task(self.start_async_coro(**kwargs))
+
+    def join(self):
+        if self.separate_process:
+            self.process.join()
 
 
 class ProcessingCluster(ProcessingUnit):
