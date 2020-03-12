@@ -848,7 +848,7 @@ class ProcessingUnit(object):
     # Constructors
     def construct(self, name=None, **kwargs):
         if self.separate_process:
-            self.new_process(self, name=name, **kwargs)
+            self.new_process(name=name, **kwargs)
 
     # Task
     def set_task(self, task):
