@@ -817,7 +817,7 @@ class ProcessingUnit(object):
         self.process = None
 
         if init:
-            self.construct()
+            self.construct(name=name)
 
     @property
     def is_processing(self):
@@ -854,13 +854,10 @@ class ProcessingUnit(object):
             raise NameError
 
     # Constructors
-    def construct(self):
+    def construct(self, name=None):
         pass
 
     # Task
-    def default_task(self, **kwargs):
-        self.task = self.DEFAULT_TASK(**kwargs)
-
     def set_task(self, task):
         self.task = task
 
