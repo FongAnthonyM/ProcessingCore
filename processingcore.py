@@ -536,7 +536,7 @@ class ProcessTask(object):
     def run_async(self, **kwargs):
         asyncio.run(self.run_async_coro(**kwargs))
 
-    def run_async_await(self, **kwargs):
+    async def run_async_await(self, **kwargs):
         await self.run_async_coro(**kwargs)
 
     def run_async_task(self, **kwargs):
@@ -555,7 +555,7 @@ class ProcessTask(object):
     def start_async(self, **kwargs):
         asyncio.run(self.start_async_coro(**kwargs))
 
-    def start_async_await(self, **kwargs):
+    async def start_async_await(self, **kwargs):
         await self.start_async_coro(**kwargs)
 
     def start_async_task(self, **kwargs):
@@ -601,7 +601,7 @@ class MultiUnitTask(ProcessTask):
         return self.units.items()
 
     def append(self, name, unit, setup=False, process=False, kwargs={}):
-        self.units[name] = {"unit": unit, "setup": setup, "process": process, "kwargs": kwargs}
+        self.units[name] = {"unit": unit, "setup": setup, "kwargs": kwargs}
 
     def pop(self, name):
         return self.units.pop(name)
@@ -622,13 +622,14 @@ class MultiUnitTask(ProcessTask):
 
     def task(self, name=None, asyn=""):
         if not asyn:
-            self.unit_run()
+            self.units_run()
+            return None
         elif asyn == "await":
-            self.unit_async_await()
+            return self.units_async_await()
         else:
-            self.unit_async_task()
+            return self.units_async_task()
 
-    def unit_run(self):
+    def units_run(self):
         if self.execution_order is None:
             names = self.units
         else:
@@ -636,12 +637,9 @@ class MultiUnitTask(ProcessTask):
 
         for name in names:
             unit = self.units[name]
-            if unit["process"]:
-                unit.start_async_await(**unit["kwargs"])
-            else:
-                unit.run_async_await(**unit["kwargs"])
+            unit.run(**unit["kwargs"])
 
-    def unit_async_await(self):
+    async def units_async_await(self):
         if self.execution_order is None:
             names = self.units
         else:
@@ -649,12 +647,9 @@ class MultiUnitTask(ProcessTask):
 
         for name in names:
             unit = self.units[name]
-            if unit["process"]:
-                unit.start_async_await(**unit["kwargs"])
-            else:
-                unit.run_async_await(**unit["kwargs"])
+            unit.run_async_await(**unit["kwargs"])
 
-    def unit_async_task(self):
+    async def units_async_task(self):
         tasks = []
         if self.execution_order is None:
             names = self.units
@@ -663,10 +658,7 @@ class MultiUnitTask(ProcessTask):
 
         for name in names:
             unit = self.units[name]
-            if unit["process"]:
-                tasks.append(unit.start_async_task(**unit["kwargs"]))
-            else:
-                tasks.append(unit.run_async_task(**unit["kwargs"]))
+            tasks.append(unit.run_async_task(**unit["kwargs"]))
         for task in tasks:
             await task
 
@@ -906,7 +898,7 @@ class ProcessingUnit(object):
     def run_async(self, **kwargs):
         asyncio.run(self.run_async_coro(**kwargs))
 
-    def run_async_await(self, **kwargs):
+    async def run_async_await(self, **kwargs):
         await self.run_async_coro(**kwargs)
 
     def run_async_task(self, **kwargs):
@@ -935,7 +927,7 @@ class ProcessingUnit(object):
     def start_async(self, **kwargs):
         asyncio.run(self.start_async_coro(**kwargs))
 
-    def start_async_wait(self, **kwargs):
+    async def start_async_wait(self, **kwargs):
         await self.start_async_coro(**kwargs)
 
     def start_async_task(self, **kwargs):
