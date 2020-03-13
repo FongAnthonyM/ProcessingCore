@@ -92,22 +92,24 @@ class BroadcastPipe(object):
         else:
             return None
 
-    def recv_wait(self, name, timeout=0.0, interval=0.0):
+    def recv_wait(self, name, timeout=None, interval=0.0):
         connection = self.recv_connections[name]
         start_time = time.perf_counter()
         while not connection.poll():
             time.sleep(interval)
-            if (time.perf_counter() - start_time) >= timeout:
+            if timeout is not None and (time.perf_counter() - start_time) >= timeout:
                 warnings.warn()
+                return None
         return connection.recv()
 
-    async def recv_wait_async(self, name, timeout=0.0, interval=0.0):
+    async def recv_wait_async(self, name, timeout=None, interval=0.0):
         connection = self.recv_connections[name]
         start_time = time.perf_counter()
         while not connection.poll():
             await asyncio.sleep(interval)
-            if (time.perf_counter() - start_time) >= timeout:
+            if timeout is not None and (time.perf_counter() - start_time) >= timeout:
                 warnings.warn()
+                return None
         return connection.recv()
 
     def recv_bytes(self, name, poll=True, timeout=0.0, **kwargs):
@@ -117,22 +119,24 @@ class BroadcastPipe(object):
         else:
             return None
 
-    def recv_bytes_wait(self, name, timeout=0.0, interval=0.0, **kwargs):
+    def recv_bytes_wait(self, name, timeout=None, interval=0.0, **kwargs):
         connection = self.recv_connections[name]
         start_time = time.perf_counter()
         while not connection.poll():
             time.sleep(interval)
-            if (time.perf_counter() - start_time) >= timeout:
+            if timeout is not None and (time.perf_counter() - start_time) >= timeout:
                 warnings.warn()
+                return None
         return connection.recv_bytes(**kwargs)
 
-    async def recv_bytes_wait_async(self, name, timeout=0.0, interval=0.0, **kwargs):
+    async def recv_bytes_wait_async(self, name, timeout=None, interval=0.0, **kwargs):
         connection = self.recv_connections[name]
         start_time = time.perf_counter()
         while not connection.poll():
             await asyncio.sleep(interval)
-            if (time.perf_counter() - start_time) >= timeout:
+            if timeout is not None and (time.perf_counter() - start_time) >= timeout:
                 warnings.warn()
+                return None
         return connection.recv_bytes(**kwargs)
 
     def clear_recv(self, name):
@@ -207,22 +211,24 @@ class BroadcastQueue(object):
     def get(self, name, block=True, timeout=0.0):
         return self.queues[name].get(block=block, timeout=timeout)
 
-    def get_wait(self, name, timeout=0.0, interval=0.0):
+    def get_wait(self, name, timeout=None, interval=0.0):
         connection = self.queues[name]
         start_time = time.perf_counter()
         while connection.empty():
             time.sleep(interval)
-            if (time.perf_counter() - start_time) >= timeout:
+            if timeout is not None and (time.perf_counter() - start_time) >= timeout:
                 warnings.warn()
+                return None
         return connection.get()
 
-    async def get_wait_async(self, name, timeout=0.0, interval=0.0):
+    async def get_wait_async(self, name, timeout=None, interval=0.0):
         connection = self.queues[name]
         start_time = time.perf_counter()
         while connection.empty():
             await asyncio.sleep(interval)
-            if (time.perf_counter() - start_time) >= timeout:
+            if timeout is not None and (time.perf_counter() - start_time) >= timeout:
                 warnings.warn()
+                return None
         return connection.get()
 
 
@@ -304,56 +310,62 @@ class InputsHandler(object):
         elif name in self.queues:
             return self.queues[name].get(**kwargs)
 
-    def get_item_wait(self, name, timeout=0.0, interval=0.0):
+    def get_item_wait(self, name, timeout=None, interval=0.0):
         if name in self.broadcasters:
             connection = self.broadcasters[name]
             start_time = time.perf_counter()
             while not connection.poll():
                 time.sleep(interval)
-                if (time.perf_counter() - start_time) >= timeout:
+                if timeout is not None and (time.perf_counter() - start_time) >= timeout:
                     warnings.warn()
+                    return None
             return connection.recv()
         elif name in self.pipes:
             connection = self.pipes[name]
             start_time = time.perf_counter()
             while not connection.poll():
                 time.sleep(interval)
-                if (time.perf_counter() - start_time) >= timeout:
+                if timeout is not None and (time.perf_counter() - start_time) >= timeout:
                     warnings.warn()
+                    return None
             return connection.recv()
         elif name in self.queues:
             connection = self.queues[name]
             start_time = time.perf_counter()
             while connection.empty():
                 time.sleep(interval)
-                if (time.perf_counter() - start_time) >= timeout:
+                if timeout is not None and (time.perf_counter() - start_time) >= timeout:
                     warnings.warn()
+                    return None
             return connection.get()
 
-    async def get_item_wait_async(self, name, timeout=0.0, interval=0.0):
+    async def get_item_wait_async(self, name, timeout=None, interval=0.0):
         if name in self.broadcasters:
             connection = self.broadcasters[name]
             start_time = time.perf_counter()
             while not connection.poll():
                 await asyncio.sleep(interval)
-                if (time.perf_counter() - start_time) >= timeout:
+                if timeout is not None and (time.perf_counter() - start_time) >= timeout:
                     warnings.warn()
+                    return None
             return connection.recv()
         elif name in self.pipes:
             connection = self.pipes[name]
             start_time = time.perf_counter()
             while not connection.poll():
                 await asyncio.sleep(interval)
-                if (time.perf_counter() - start_time) >= timeout:
+                if timeout is not None and (time.perf_counter() - start_time) >= timeout:
                     warnings.warn()
+                    return None
             return connection.recv()
         elif name in self.queues:
             connection = self.queues[name]
             start_time = time.perf_counter()
             while connection.empty():
                 await asyncio.sleep(interval)
-                if (time.perf_counter() - start_time) >= timeout:
+                if timeout is not None and (time.perf_counter() - start_time) >= timeout:
                     warnings.warn()
+                    return None
             return connection.get()
 
     @staticmethod
@@ -778,8 +790,15 @@ class SeparateProcess(object):
     def start(self):
         self.process.start()
 
-    def join(self):
-        self.process.join()
+    def join(self, timeout=0.0):
+        self.process.join(timeout=timeout)
+
+    async def join_async(self, timeout=None, interval=0.0):
+        start_time = time.perf_counter()
+        while self.process.join(0) is None:
+            await asyncio.sleep(interval)
+            if timeout is not None and (time.perf_counter() - start_time) >= timeout:
+                return None
 
     def restart(self):
         if isinstance(self.process, Process):
@@ -803,7 +822,7 @@ class ProcessingUnit(object):
     DEFAULT_TASK = ProcessTask
 
     # Construction/Destruction
-    def __init__(self, name=None, allow_setup=True, separate_process=False, init=True, **kwargs):
+    def __init__(self, name=None, allow_setup=True, separate_process=False, init=True, daemon=False, **kwargs):
         self.name = name
         self.separate_process = separate_process
         self._is_processing = False
@@ -817,7 +836,7 @@ class ProcessingUnit(object):
         self.process = None
 
         if init:
-            self.construct(name=name, **kwargs)
+            self.construct(name=name, daemon=daemon, **kwargs)
 
     @property
     def is_processing(self):
@@ -854,9 +873,9 @@ class ProcessingUnit(object):
             raise NameError
 
     # Constructors
-    def construct(self, name=None, **kwargs):
+    def construct(self, name=None, daemon=False, **kwargs):
         if self.separate_process:
-            self.new_process(name=name, **kwargs)
+            self.new_process(name=name, daemon=True, **kwargs)
 
     # Task
     def set_task(self, task):
@@ -889,7 +908,7 @@ class ProcessingUnit(object):
             self._runtime_setup()
 
         if self.separate_process:
-            self.process.create_process(self.task.run, kwargs=kwargs)
+            self.process.target_object_method(self.task, "run", kwargs=kwargs)
             self.process.start()
         else:
             self.task.run(**kwargs)
@@ -897,28 +916,40 @@ class ProcessingUnit(object):
     async def run_async_coro(self, **kwargs):
         if self.allow_setup:
             self._runtime_setup()
-
-        if self.separate_process:
-            self.process.create_process(self.task.run_async_coro, kwargs=kwargs)
-            self.process.start()
-        else:
-            self.task.run_async_coro(**kwargs)
+        self.task.run_async_coro(**kwargs)
 
     def run_async(self, **kwargs):
-        asyncio.run(self.run_async_coro(**kwargs))
+        if self.separate_process:
+            self._runtime_setup()
+            self.process.target_object_method(self.task, "run_async_coro", kwargs=kwargs)
+            self.process.start()
+        else:
+            asyncio.run(self.run_async_coro(**kwargs))
 
     async def run_async_await(self, **kwargs):
-        await self.run_async_coro(**kwargs)
+        if self.separate_process:
+            self._runtime_setup()
+            self.process.target_object_method(self.task, "run_async_coro", kwargs=kwargs)
+            self.process.start()
+            await self.process.join_async()
+        else:
+            await self.run_async_coro(**kwargs)
 
     def run_async_task(self, **kwargs):
-        return asyncio.create_task(self.run_async_coro(**kwargs))
+        if self.separate_process:
+            self._runtime_setup()
+            self.process.target_object_method(self.task, "run_async_coro", kwargs=kwargs)
+            self.process.start()
+            return asyncio.create_task(self.process.join_async())
+        else:
+            return asyncio.create_task(self.run_async_coro(**kwargs))
 
     def start(self, **kwargs):
         if self.allow_setup:
             self._runtime_setup()
 
         if self.separate_process:
-            self.process.create_process(self.task.start, kwargs=kwargs)
+            self.process.target_object_method(self.task, "start", kwargs=kwargs)
             self.process.start()
         else:
             self.task.start(**kwargs)
@@ -926,15 +957,15 @@ class ProcessingUnit(object):
     async def start_async_coro(self, **kwargs):
         if self.allow_setup:
             self._runtime_setup()
-
-        if self.separate_process:
-            self.process.create_process(self.task.start_async_coro, kwargs=kwargs)
-            self.process.start()
-        else:
-            self.task.start_async_coro(**kwargs)
+        self.task.start_async_coro(**kwargs)
 
     def start_async(self, **kwargs):
-        asyncio.run(self.start_async_coro(**kwargs))
+        if self.separate_process:
+            self._runtime_setup()
+            self.process.target_object_method(self.task, "start_async", kwargs=kwargs)
+            self.process.start()
+        else:
+            asyncio.run(self.start_async_coro(**kwargs))
 
     async def start_async_wait(self, **kwargs):
         await self.start_async_coro(**kwargs)
@@ -946,9 +977,13 @@ class ProcessingUnit(object):
         if self.separate_process:
             self.task.stop()
 
-    def join(self):
+    def join(self, timeout=None):
         if self.separate_process:
-            self.process.join()
+            return self.process.join(timeout=timeout)
+
+    async def join_async(self, timeout=None, interval=0.0):
+        if self.separate_process:
+            return self.process.join_async(timeout=timeout, interval=interval)
 
     def terminate(self):
         if self.separate_process:
