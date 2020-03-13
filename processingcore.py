@@ -672,6 +672,7 @@ class SeparateProcess(object):
         self._daemon = daemon
         self._target = target
         self._target_kwargs = kwargs
+        self.method_wrapper = run_method
 
         self._process = None
 
@@ -762,6 +763,13 @@ class SeparateProcess(object):
 
     def set_process(self, process):
         self.process = process
+
+    # Task
+    def target_object_method(self, obj, method, **kwargs):
+        kwargs["obj"] = obj
+        kwargs["method"] = method
+        self.target_kwargs = kwargs
+        self.process = Process(target=self.method_wrapper, name=self.name, daemon=self.daemon, kwargs=self.target_kwargs)
 
     # Execution
     def run(self):
@@ -992,6 +1000,10 @@ class ProcessingCluster(ProcessingUnit):
 
     def clear(self):
         self.task.clear()
+
+
+def run_method(obj, method, **kwargs):
+    return getattr(obj, method)(**kwargs)
 
 
 # Main #
