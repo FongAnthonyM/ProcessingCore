@@ -474,6 +474,16 @@ class ProcessTask(object):
         if init:
             self.construct()
 
+    # Pickling
+    def __getstate__(self):
+        out_dict = self.__dict__
+        del out_dict["async_loop"]
+        return out_dict
+
+    def __setstate__(self, in_dict):
+        in_dict["async_loop"] = asyncio.get_event_loop()
+        self.__dict__ = in_dict
+
     # Constructors
     def construct(self):
         self.create_io()
