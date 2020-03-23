@@ -723,7 +723,6 @@ class OutputsHandler(object):
         self.interrupts.interrupt_all()
 
 
-# Todo: Make controls available at unit level (events and locks)
 class ProcessTask(object):
     # Construction/Destruction
     def __init__(self, name=None, allow_setup=True, init=True, kwargs={}):
@@ -757,14 +756,19 @@ class ProcessTask(object):
 
     # Constructors/Destructors
     def construct(self):
-        self.create_io()
+        self.construct_io()
 
     # IO
-    def create_io(self):
+    def construct_io(self):
         self.inputs = InputsHandler(name=self.name)
         self.outputs = OutputsHandler(name=self.name)
 
-        self.inputs.create_queue("SelfStop")
+        self.inputs.create_event("SelfStop")
+
+        self.create_io()
+
+    def create_io(self):
+        pass
 
     # Multiprocess Event
     def create_event(self, name):
@@ -782,18 +786,25 @@ class ProcessTask(object):
     def set_lock(self, name, lock):
         self.locks[name] = lock
 
-    # Task
-    def setup(self):
-        self.async_loop = asyncio.get_event_loop()
+    # Task Operators
+    def set_task(self, func):
+        self._runtime_task = func
+
+    def set_task_async(self, func):
+        self._runtime_task_async = func
 
     def set_task_as_async(self):
         self._runtime_task_async = self.task_as_async
 
-    def task(self, name=None):
-        pass
-
     async def task_as_async(self, **kwargs):
         return self._runtime_task(**kwargs)
+
+    # Task
+    def setup(self):
+        pass
+
+    def task(self, name=None):
+        pass
 
     async def task_async(self, name=None):
         pass
@@ -1111,14 +1122,14 @@ class ProcessingUnit(object):
     DEFAULT_TASK = ProcessTask
 
     # Construction/Destruction
-    def __init__(self, name=None, allow_setup=True, separate_process=False, init=True, daemon=False, **kwargs):
+    def __init__(self, name=None, task=None, allow_setup=True, separate_process=False, init=True, daemon=False, **kwargs):
         self.name = name
         self.separate_process = separate_process
         self._is_processing = False
         self.allow_setup = allow_setup
 
         self._runtime_setup = self.setup
-        self.task = None
+        self.task = task
         self._runtime_task = None
 
         self.processing_pool = None
@@ -1132,6 +1143,34 @@ class ProcessingUnit(object):
         if self.process is not None and self.separate_process:
             self._is_processing = self.process.is_alive
         return self._is_processing
+
+    @property
+    def events(self):
+        if self.task is not None:
+            return self.task.events
+        else:
+            return None
+
+    @events.setter
+    def events(self, value):
+        if self.task is not None:
+            self.task.events = value
+        else:
+            raise NameError
+
+    @property
+    def locks(self):
+        if self.task is not None:
+            return self.task.locks
+        else:
+            return None
+
+    @locks.setter
+    def locks(self, value):
+        if self.task is not None:
+            self.task.locks = value
+        else:
+            raise NameError
 
     @property
     def inputs(self):
@@ -1162,17 +1201,21 @@ class ProcessingUnit(object):
             raise NameError
 
     # Constructors
-    def construct(self, name=None, daemon=False, **kwargs):
+    def construct(self, name=None, task=None, daemon=False, **kwargs):
         if self.separate_process:
             self.new_process(name=name, daemon=True, **kwargs)
+        if task is None:
+            if self.task is None:
+                self.default_task()
+        else:
+            self.task = task
 
     # Task
+    def default_task(self):
+        self.task = self.DEFAULT_TASK(name=self.name)
+
     def set_task(self, task):
         self.task = task
-
-    # IO
-    def create_io(self):
-        self.task.create_io()
 
     # Process
     def new_process(self, name=None, daemon=False, kwargs={}):
