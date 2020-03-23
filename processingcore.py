@@ -812,7 +812,7 @@ class ProcessTask(object):
     def task_loop(self, **kwargs):
         while not self.stop_event.is_set():
             if not self.inputs.get_item("SelfStop"):
-                self._runtime_task(**self.kwargs)
+                self._runtime_task(**kwargs)
             else:
                 self.stop_event.set()
 
