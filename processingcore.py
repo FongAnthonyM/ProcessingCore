@@ -1305,9 +1305,11 @@ class ProcessingUnit(object):
     def start_async_task(self, **kwargs):
         return asyncio.create_task(self.start_async_coro(**kwargs))
 
-    def stop(self):
+    def stop(self, join=True):
         if self.separate_process:
             self.task.stop()
+            if join:
+                self.join()
 
     def join(self, timeout=None):
         if self.separate_process:
