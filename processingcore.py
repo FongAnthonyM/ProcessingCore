@@ -1077,7 +1077,7 @@ class SeparateProcess(object):
         self.process = process
 
     # Task
-    def target_object_method(self, obj, method, **kwargs):
+    def target_object_method(self, obj, method, kwargs):
         kwargs["obj"] = obj
         kwargs["method"] = method
         self.target_kwargs = kwargs
@@ -1369,7 +1369,7 @@ class ProcessingCluster(ProcessingUnit):
         self.task.clear()
 
 
-def run_method(obj, method, **kwargs):
+def run_method(obj, method, kwargs):
     return getattr(obj, method)(**kwargs)
 
 
