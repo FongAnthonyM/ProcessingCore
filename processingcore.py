@@ -944,7 +944,7 @@ class MultiUnitTask(ProcessTask):
             await self.units_async_await()
 
     def units_run(self):
-        if self.execution_order is None:
+        if not self.execution_order:
             names = self.units
         else:
             names = self.execution_order
@@ -954,7 +954,7 @@ class MultiUnitTask(ProcessTask):
             unit.run(**unit["kwargs"])
 
     async def units_async_await(self):
-        if self.execution_order is None:
+        if not self.execution_order:
             names = self.units
         else:
             names = self.execution_order
@@ -965,7 +965,7 @@ class MultiUnitTask(ProcessTask):
 
     async def units_async_task(self):
         tasks = []
-        if self.execution_order is None:
+        if not self.execution_order:
             names = self.units
         else:
             names = self.execution_order
