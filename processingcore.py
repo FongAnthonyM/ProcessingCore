@@ -971,7 +971,7 @@ class MultiUnitTask(ProcessTask):
             names = self.execution_order
 
         for name in names:
-            unit = self.units[name]
+            unit = self.units[name]["unit"]
             tasks.append(unit.run_async_task(**unit["kwargs"]))
         for task in tasks:
             await task
