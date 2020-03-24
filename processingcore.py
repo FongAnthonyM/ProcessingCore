@@ -924,7 +924,7 @@ class MultiUnitTask(ProcessTask):
         self.units.clear()
 
     def setup(self):
-        if self.execution_order is None:
+        if not self.execution_order:
             names = self.units
         else:
             names = self.execution_order
