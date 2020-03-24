@@ -934,14 +934,14 @@ class MultiUnitTask(ProcessTask):
                 unit.allow_setup = False
                 unit.setup()
 
-    def task(self, name=None, asyn=""):
-        if not asyn:
-            self.units_run()
-            return None
-        elif asyn == "await":
-            return self.units_async_await()
+    def task(self, name=None):
+        self.units_run()
+
+    async def task_async(self, name=None, is_task=True):
+        if is_task:
+            await self.units_async_task()
         else:
-            return self.units_async_task()
+            await self.units_async_await()
 
     def units_run(self):
         if self.execution_order is None:
