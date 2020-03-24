@@ -473,7 +473,9 @@ class InputsHandler(object):
 
     def add_broadcast(self, name, broadcaster):
         if isinstance(broadcaster, BroadcastPipe):
-            self.inputs[name] = broadcaster.recv_connections(name)
+            if name not in broadcaster.recv_connections:
+                broadcaster.create_pipe(name)
+            self.inputs[name] = broadcaster.recv_connections[name]
         else:
             self.inputs[name] = broadcaster
         self.broadcasters = self.inputs[name]
@@ -691,7 +693,7 @@ class OutputsHandler(object):
 
     def add_broadcast(self, name, broadcaster):
         self.outputs[name] = broadcaster
-        self.broadcasters = broadcaster
+        self.broadcasters[name] = broadcaster
 
     def clear_broadcasts(self):
         for broadcast in self.broadcasters:
