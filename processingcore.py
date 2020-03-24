@@ -1325,8 +1325,10 @@ class ProcessingUnit(object):
 
 
 class ProcessingCluster(ProcessingUnit):
-    def __init__(self, name=None, init=True):
-        super().__init__(name=name, init=False)
+    DEFAULT_TASK = MultiUnitTask
+
+    def __init__(self, name=None, task=None, allow_setup=True, separate_process=False, init=True, daemon=False, **kwargs):
+        super().__init__(name, task, allow_setup, separate_process, init=False, daemon=daemon, **kwargs)
 
         if init:
             self.construct(name)
@@ -1346,10 +1348,6 @@ class ProcessingCluster(ProcessingUnit):
     @units.setter
     def units(self, value):
         self.task.units = value
-
-    def construct(self, name=None, **kwargs):
-        super().construct(name=name, **kwargs)
-        self.set_task(MultiUnitTask(name=name))
 
     def keys(self):
         return self.task.keys()
