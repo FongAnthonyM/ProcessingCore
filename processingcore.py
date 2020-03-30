@@ -916,9 +916,6 @@ class MultiUnitTask(ProcessTask):
     def clear(self):
         self.units.clear()
 
-    def set_async_task_runtime(self):
-        self._runtime_task_async = self.task_async_task
-
     def setup(self):
         if not self.execution_order:
             names = self.units
@@ -946,21 +943,6 @@ class MultiUnitTask(ProcessTask):
                 unit.run(**kwargs)
 
     async def task_async(self, name=None):
-        if not self.execution_order:
-            names = self.units
-        else:
-            names = self.execution_order
-
-        for name in names:
-            unit = self.units[name]["unit"]
-            kwargs = self.units[name]["kwargs"]
-            start = self.units[name]["start"]
-            if start:
-                await unit.start_async_coro(**kwargs)
-            else:
-                await unit.run_async_coro(**kwargs)
-
-    async def task_async_task(self, name=None):
         tasks = []
         if not self.execution_order:
             names = self.units
