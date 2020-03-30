@@ -478,7 +478,7 @@ class InputsHandler(object):
             self.inputs[name] = broadcaster.recv_connections[name]
         else:
             self.inputs[name] = broadcaster
-        self.broadcasters = self.inputs[name]
+        self.broadcasters[name] = self.inputs[name]
 
     def clear_broadcasts(self):
         for broadcast in self.broadcasters:
