@@ -540,6 +540,8 @@ class InputsHandler(object):
             return self.safe_pipe_recv(self.pipes[name], **kwargs)
         elif name in self.broadcasters:
             return self.safe_pipe_recv(self.broadcasters[name], **kwargs)
+        else:
+            warnings.warn()
 
     def get_item_wait(self, name, timeout=None, interval=0.0, reset=True):
         if name in self.events:
@@ -550,6 +552,8 @@ class InputsHandler(object):
             return self.wait_for_pipe(name=name, timeout=timeout, interval=interval)
         elif name in self.broadcasters:
             return self.wait_for_broadcast(name=name, timeout=timeout, interval=interval)
+        else:
+            warnings.warn()
 
     async def get_item_wait_async(self, name, timeout=None, interval=0.0, reset=True):
         if name in self.events:
@@ -560,6 +564,8 @@ class InputsHandler(object):
             return await self.wait_for_pipe_async(name=name, timeout=timeout, interval=interval)
         elif name in self.broadcasters:
             return await self.wait_for_broadcast_async(name=name, timeout=timeout, interval=interval)
+        else:
+            warnings.warn()
 
     def stop_all(self):
         self.interrupts.interrupt_all()
