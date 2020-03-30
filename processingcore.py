@@ -874,7 +874,7 @@ class ProcessTask(object):
     def stop(self):
         self.stop_event.set()
 
-# Todo: test it
+
 class MultiUnitTask(ProcessTask):
     # Construction/Destruction
     def __init__(self, name=None, allow_setup=True, init=True, kwargs={}):
@@ -1348,9 +1348,8 @@ class ProcessingCluster(ProcessingUnit):
     def items(self):
         return self.task.items()
 
-    def append(self, name, unit, setup=False, process=False):
-        # {"unit": unit, "setup": setup, "process": process}
-        self.task.units[name] = {"unit": unit, "setup": setup, "process": process}
+    def append(self, name, unit, setup=False, start=True, kwargs={}):
+        self.task.append(name, unit, setup, start, kwargs)
 
     def pop(self, name):
         return self.task.pop(name)
