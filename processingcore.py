@@ -821,7 +821,7 @@ class ProcessTask(object):
     async def task_loop_async(self, **kwargs):
         while not self.stop_event.is_set():
             if not self.inputs.get_item("SelfStop"):
-                await self._runtime_task_async(**kwargs)
+                await asyncio.create_task(self._runtime_task_async(**kwargs))
             else:
                 self.stop_event.set()
 
