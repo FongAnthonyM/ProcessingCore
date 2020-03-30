@@ -821,8 +821,7 @@ class ProcessTask(object):
     async def task_loop_async(self, **kwargs):
         while not self.stop_event.is_set():
             if not self.inputs.get_item("SelfStop"):
-                packaged_task = asyncio.create_task(self._runtime_task_async(**kwargs))
-                await packaged_task
+                await self._runtime_task_async(**kwargs)
             else:
                 self.stop_event.set()
 
@@ -846,9 +845,6 @@ class ProcessTask(object):
     def run_async(self, **kwargs):
         asyncio.run(self.run_async_coro(**kwargs))
 
-    async def run_async_await(self, **kwargs):
-        await self.run_async_coro(**kwargs)
-
     def run_async_task(self, **kwargs):
         return asyncio.create_task(self.run_async_coro(**kwargs))
 
@@ -869,9 +865,6 @@ class ProcessTask(object):
     def start_async(self, **kwargs):
         asyncio.run(self.start_async_coro(**kwargs))
 
-    async def start_async_await(self, **kwargs):
-        await self.start_async_coro(**kwargs)
-
     def start_async_task(self, **kwargs):
         return asyncio.create_task(self.start_async_coro(**kwargs))
 
@@ -881,7 +874,7 @@ class ProcessTask(object):
     def stop(self):
         self.stop_event.set()
 
-
+# Todo: test it
 class MultiUnitTask(ProcessTask):
     # Construction/Destruction
     def __init__(self, name=None, allow_setup=True, init=True, kwargs={}):
@@ -914,14 +907,17 @@ class MultiUnitTask(ProcessTask):
     def items(self):
         return self.units.items()
 
-    def append(self, name, unit, setup=False, process=False, kwargs={}):
-        self.units[name] = {"unit": unit, "setup": setup, "kwargs": kwargs}
+    def append(self, name, unit, setup=False, start=True, kwargs={}):
+        self.units[name] = {"unit": unit, "setup": setup, "start": start, "kwargs": kwargs}
 
     def pop(self, name):
         return self.units.pop(name)
 
     def clear(self):
         self.units.clear()
+
+    def set_async_task_runtime(self):
+        self._runtime_task_async = self.task_async_task
 
     def setup(self):
         if not self.execution_order:
@@ -935,35 +931,36 @@ class MultiUnitTask(ProcessTask):
                 unit.setup()
 
     def task(self, name=None):
-        self.units_run()
-
-    async def task_async(self, name=None, is_task=True):
-        if is_task:
-            await self.units_async_task()
-        else:
-            await self.units_async_await()
-
-    def units_run(self):
         if not self.execution_order:
             names = self.units
         else:
             names = self.execution_order
 
         for name in names:
-            unit = self.units[name]
-            unit.run(**unit["kwargs"])
+            unit = self.units[name]["unit"]
+            kwargs = self.units[name]["kwargs"]
+            start = self.units[name]["start"]
+            if start:
+                unit.start(**kwargs)
+            else:
+                unit.run(**kwargs)
 
-    async def units_async_await(self):
+    async def task_async(self, name=None):
         if not self.execution_order:
             names = self.units
         else:
             names = self.execution_order
 
         for name in names:
-            unit = self.units[name]
-            unit.run_async_await(**unit["kwargs"])
+            unit = self.units[name]["unit"]
+            kwargs = self.units[name]["kwargs"]
+            start = self.units[name]["start"]
+            if start:
+                await unit.start_async_coro(**kwargs)
+            else:
+                await unit.run_async_coro(**kwargs)
 
-    async def units_async_task(self):
+    async def task_async_task(self, name=None):
         tasks = []
         if not self.execution_order:
             names = self.units
@@ -972,7 +969,12 @@ class MultiUnitTask(ProcessTask):
 
         for name in names:
             unit = self.units[name]["unit"]
-            tasks.append(unit.run_async_task(**unit["kwargs"]))
+            kwargs = self.units[name]["kwargs"]
+            start = self.units[name]["start"]
+            if start:
+                tasks.append(unit.start_async_task(**kwargs))
+            else:
+                tasks.append(unit.run_async_task(**kwargs))
         for task in tasks:
             await task
 
@@ -1250,33 +1252,20 @@ class ProcessingUnit(object):
     async def run_async_coro(self, **kwargs):
         if self.allow_setup:
             self._runtime_setup()
-        self.task.run_async_coro(**kwargs)
+
+        if self.separate_process:
+            self._runtime_setup()
+            self.process.target_object_method(self.task, "run_async", kwargs=kwargs)
+            self.process.start()
+            # await join() process?
+        else:
+            await self.task.run_async_coro(**kwargs)
 
     def run_async(self, **kwargs):
-        if self.separate_process:
-            self._runtime_setup()
-            self.process.target_object_method(self.task, "run_async_coro", kwargs=kwargs)
-            self.process.start()
-        else:
-            asyncio.run(self.run_async_coro(**kwargs))
-
-    async def run_async_await(self, **kwargs):
-        if self.separate_process:
-            self._runtime_setup()
-            self.process.target_object_method(self.task, "run_async_coro", kwargs=kwargs)
-            self.process.start()
-            await self.process.join_async()
-        else:
-            await self.run_async_coro(**kwargs)
+        asyncio.run(self.run_async_coro(**kwargs))
 
     def run_async_task(self, **kwargs):
-        if self.separate_process:
-            self._runtime_setup()
-            self.process.target_object_method(self.task, "run_async_coro", kwargs=kwargs)
-            self.process.start()
-            return asyncio.create_task(self.process.join_async())
-        else:
-            return asyncio.create_task(self.run_async_coro(**kwargs))
+        return asyncio.create_task(self.run_async_coro(**kwargs))
 
     def start(self, **kwargs):
         if self.allow_setup:
@@ -1291,18 +1280,17 @@ class ProcessingUnit(object):
     async def start_async_coro(self, **kwargs):
         if self.allow_setup:
             self._runtime_setup()
-        self.task.start_async_coro(**kwargs)
 
-    def start_async(self, **kwargs):
         if self.separate_process:
             self._runtime_setup()
             self.process.target_object_method(self.task, "start_async", kwargs=kwargs)
             self.process.start()
+            # await join() process?
         else:
-            asyncio.run(self.start_async_coro(**kwargs))
+            await self.task.start_async_coro(**kwargs)
 
-    async def start_async_wait(self, **kwargs):
-        await self.start_async_coro(**kwargs)
+    def start_async(self, **kwargs):
+        asyncio.run(self.start_async_coro(**kwargs))
 
     def start_async_task(self, **kwargs):
         return asyncio.create_task(self.start_async_coro(**kwargs))
