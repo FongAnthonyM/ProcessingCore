@@ -830,6 +830,7 @@ class ProcessTask(object):
                 await asyncio.create_task(self._runtime_task_async(**kwargs))
             else:
                 self.stop_event.set()
+        print("Loop Finished")
 
     # Execution
     def run(self, **kwargs):
