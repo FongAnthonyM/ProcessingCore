@@ -593,7 +593,7 @@ class InputsHandler(object):
             warnings.warn()
 
     def stop_all(self):
-        self.interrupts.interrupt_all()
+        self.interrupts.interrupt_all_processes()
 
     @staticmethod
     def safe_pipe_recv(pipe, poll=True, timeout=0.0):
@@ -751,7 +751,7 @@ class OutputsHandler(object):
             warnings.warn()
 
     def stop_all(self):
-        self.interrupts.interrupt_all()
+        self.interrupts.interrupt_all_processes()
 
 
 class ProcessTask(object):
@@ -936,8 +936,8 @@ class ProcessTask(object):
 
     def stop(self):
         self.stop_event.set()
-        self.inputs.stop_all_processes()
-        self.outputs.stop_all_processes()
+        self.inputs.stop_all()
+        self.outputs.stop_all()
 
     def reset(self):
         self.stop_event.clear()
