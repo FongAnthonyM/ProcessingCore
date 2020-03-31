@@ -913,6 +913,8 @@ class ProcessTask(object):
 
     def stop(self):
         self.stop_event.set()
+        self.inputs.stop_all()
+        self.outputs.stop_all()
 
     def reset(self):
         self.stop_event.clear()
