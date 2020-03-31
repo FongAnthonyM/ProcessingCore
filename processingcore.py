@@ -733,10 +733,11 @@ class OutputsHandler(object):
 
 class ProcessTask(object):
     # Construction/Destruction
-    def __init__(self, name=None, allow_setup=True, init=True, kwargs={}):
+    def __init__(self, name=None, allow_setup=True, allow_closure=True, init=True, kwargs={}):
         self.name = name
         self.kwargs = kwargs
         self.allow_setup = allow_setup
+        self.allow_closure = allow_closure
         self.stop_event = Event()
         self.events = {}
         self.locks = {}
@@ -747,6 +748,7 @@ class ProcessTask(object):
         self._runtime_setup = self.setup
         self._runtime_task = self.task
         self._runtime_task_async = self.task_async
+        self._runtime_closure = self.closure
         self.async_loop = asyncio.get_event_loop()
 
         if init:
@@ -794,7 +796,10 @@ class ProcessTask(object):
     def set_lock(self, name, lock):
         self.locks[name] = lock
 
-    # Task Operators
+    # Set Runtime Operators
+    def set_setup(self, func):
+        self._runtime_setup = func
+
     def set_task(self, func):
         self._runtime_task = func
 
@@ -807,6 +812,9 @@ class ProcessTask(object):
     async def task_as_async(self, **kwargs):
         return self._runtime_task(**kwargs)
 
+    def set_closure(self, func):
+        self._runtime_closure = func
+
     # Task
     def setup(self):
         pass
@@ -815,6 +823,9 @@ class ProcessTask(object):
         pass
 
     async def task_async(self, name=None):
+        pass
+
+    def closure(self):
         pass
 
     def task_loop(self, **kwargs):
@@ -830,24 +841,35 @@ class ProcessTask(object):
                 await asyncio.create_task(self._runtime_task_async(**kwargs))
             else:
                 self.stop_event.set()
-        print("Loop Finished")
 
     # Execution
     def run(self, **kwargs):
+        # Optionally run Setup
         if self.allow_setup:
             self._runtime_setup()
 
+        # Run Task
         if kwargs:
             self.kwargs = kwargs
         self._runtime_task(**self.kwargs)
 
+        # Optionally run Closure
+        if self.allow_closure:
+            self._runtime_closure()
+
     async def run_async_coro(self, **kwargs):
+        # Optionally run Setup
         if self.allow_setup:
             self._runtime_setup()
 
+        # Run Task
         if kwargs:
             self.kwargs = kwargs
         await self._runtime_task_async(**kwargs)
+
+        # Optionally run Closure
+        if self.allow_closure:
+            self._runtime_closure()
 
     def run_async(self, **kwargs):
         asyncio.run(self.run_async_coro(**kwargs))
@@ -856,18 +878,32 @@ class ProcessTask(object):
         return asyncio.create_task(self.run_async_coro(**kwargs))
 
     def start(self, **kwargs):
+        # Optionally run Setup
         if self.allow_setup:
             self._runtime_setup()
+
+        # Run Task Loop
         if kwargs:
             self.kwargs = kwargs
         self.task_loop(**kwargs)
 
+        # Optionally run Closure
+        if self.allow_closure:
+            self._runtime_closure()
+
     async def start_async_coro(self, **kwargs):
+        # Optionally run Setup
         if self.allow_setup:
             self._runtime_setup()
+
+        # Run Task Loop
         if kwargs:
             self.kwargs = kwargs
         await self.task_loop_async(**kwargs)
+
+        # Optionally run Closure
+        if self.allow_closure:
+            self._runtime_closure()
 
     def start_async(self, **kwargs):
         asyncio.run(self.start_async_coro(**kwargs))
