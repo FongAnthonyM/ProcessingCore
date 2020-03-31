@@ -34,7 +34,7 @@ class Interrupt(object):
         self.event = Event()
 
     def __bool__(self):
-        self.check()
+        return self.check()
 
     def check(self):
         if self.master:
