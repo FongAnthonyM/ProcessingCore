@@ -1326,7 +1326,7 @@ class ProcessingUnit(object):
         if join:
             self.join(timeout=timeout)
 
-    def stop_async(self, join=True, timeout=None, interval=0.0):
+    async def stop_async(self, join=True, timeout=None, interval=0.0):
         self.task.stop()
         if join:
             await self.join_async(timeout=timeout, interval=interval)
