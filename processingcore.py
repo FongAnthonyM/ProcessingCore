@@ -874,23 +874,25 @@ class ProcessTask(object):
     def start_async_task(self, **kwargs):
         return asyncio.create_task(self.start_async_coro(**kwargs))
 
-    def reset(self):
-        self.stop_event.clear()
-
     def stop(self):
         self.stop_event.set()
 
+    def reset(self):
+        self.stop_event.clear()
+
 
 class MultiUnitTask(ProcessTask):
+    SETTING_NAMES = {"unit", "setup", "start", "kwargs"}
+
     # Construction/Destruction
-    def __init__(self, name=None, allow_setup=True, init=True, kwargs={}):
+    def __init__(self, name=None, units={}, order=(), allow_setup=True, init=True, kwargs={}):
         super().__init__(name, allow_setup, init=False, kwargs=kwargs)
 
-        self._execution_order = []
+        self._execution_order = ()
         self.units = {}
 
         if init:
-            self.construct()
+            self.construct(units=units, order=order)
 
     @property
     def execution_order(self):
@@ -899,10 +901,16 @@ class MultiUnitTask(ProcessTask):
     @execution_order.setter
     def execution_order(self, value):
         if len(value) == len(self.units):
-            self._execution_order.clear()
-            self._execution_order.extend(value)
+            self._execution_order = value
         else:
             warnings.warn()
+
+    def construct(self, units={}, order=()):
+        super().construct()
+        if units:
+            self.extend(units=units)
+        if order:
+            self.execution_order = order
 
     def keys(self):
         return self.units.keys()
@@ -915,6 +923,13 @@ class MultiUnitTask(ProcessTask):
 
     def append(self, name, unit, setup=False, start=True, kwargs={}):
         self.units[name] = {"unit": unit, "setup": setup, "start": start, "kwargs": kwargs}
+
+    def extend(self, units):
+        for name, unit in units.items():
+            for setting in self.SETTING_NAMES:
+                if setting not in unit:
+                    warnings.warn()
+            self.units[name] = unit
 
     def pop(self, name):
         return self.units.pop(name)
@@ -965,6 +980,29 @@ class MultiUnitTask(ProcessTask):
                 tasks.append(unit.run_async_task(**kwargs))
         for task in tasks:
             await task
+
+    def stop(self, join=True, timeout=None):
+        super().stop()
+        if not self.execution_order:
+            names = self.units
+        else:
+            names = self.execution_order
+
+        for name in names:
+            self.units[name]["unit"].stop(join=False)
+
+        for name in names:
+            self.units[name]["unit"].join(timeout=timeout)
+
+    def reset(self):
+        super().reset()
+        if not self.execution_order:
+            names = self.units
+        else:
+            names = self.execution_order
+
+        for name in names:
+            self.units[name]["unit"].reset()
 
 
 class SeparateProcess(object):
@@ -1082,7 +1120,7 @@ class SeparateProcess(object):
     def start(self):
         self.process.start()
 
-    def join(self, timeout=0.0):
+    def join(self, timeout=None):
         self.process.join(timeout=timeout)
 
     async def join_async(self, timeout=None, interval=0.0):
@@ -1090,7 +1128,7 @@ class SeparateProcess(object):
         while self.process.join(0) is None:
             await asyncio.sleep(interval)
             if timeout is not None and (time.perf_counter() - start_time) >= timeout:
-                return None
+                break
 
     def restart(self):
         if isinstance(self.process, Process):
@@ -1283,19 +1321,26 @@ class ProcessingUnit(object):
     def start_async_task(self, **kwargs):
         return asyncio.create_task(self.start_async_coro(**kwargs))
 
-    def stop(self, join=True):
-        if self.separate_process:
-            self.task.stop()
-            if join:
-                self.join()
+    def stop(self, join=True, timeout=None):
+        self.task.stop()
+        if join:
+            self.join(timeout=timeout)
+
+    def stop_async(self, join=True, timeout=None, interval=0.0):
+        self.task.stop()
+        if join:
+            await self.join_async(timeout=timeout, interval=interval)
 
     def join(self, timeout=None):
         if self.separate_process:
-            return self.process.join(timeout=timeout)
+            self.process.join(timeout=timeout)
 
     async def join_async(self, timeout=None, interval=0.0):
         if self.separate_process:
-            return self.process.join_async(timeout=timeout, interval=interval)
+            await self.process.join_async(timeout=timeout, interval=interval)
+
+    def reset(self):
+        self.task.reset()
 
     def terminate(self):
         if self.separate_process:
@@ -1339,11 +1384,19 @@ class ProcessingCluster(ProcessingUnit):
     def append(self, name, unit, setup=False, start=True, kwargs={}):
         self.task.append(name, unit, setup, start, kwargs)
 
+    def extend(self, units):
+        self.task.extend(units=units)
+
     def pop(self, name):
         return self.task.pop(name)
 
     def clear(self):
         self.task.clear()
+
+    def stop(self, join=True, timeout=None):
+        self.task.stop(join=join, timeout=timeout)
+        if join:
+            self.join(timeout=timeout)
 
 
 def run_method(obj, method, kwargs={}):
