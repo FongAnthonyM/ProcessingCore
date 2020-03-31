@@ -28,9 +28,30 @@ import time
 
 # Definitions #
 # Classes #
+class Interrupt(object):
+    def __init__(self, master=None):
+        self.master = master
+        self.event = Event()
+
+    def __bool__(self):
+        self.check()
+
+    def check(self):
+        if self.master:
+            self.event.set()
+        return self.event.is_set()
+
+    def set(self):
+        self.event.set()
+
+    def reset(self):
+        self.event.clear()
+
+
 class Interrupts(object):
     # Construction/Destruction
     def __init__(self, **kwargs):
+        self.master_interrupt = Interrupt()
         self.data = {**kwargs}
 
     # Container Methods
@@ -38,7 +59,7 @@ class Interrupts(object):
         return len(self.data)
 
     def __getitem__(self, item):
-        return self.data[item]
+        return self.get(item)
 
     def __setitem__(self, key, value):
         self.data[key] = value
@@ -49,12 +70,15 @@ class Interrupts(object):
     # Methods
     def add(self, name):
         if name not in self.data:
-            self.data[name] = Event()
+            self.data[name] = Interrupt(master=self.master_interrupt)
         return self.data[name]
 
-    def set(self, name, interrupt=Event()):
-        self.data[name] = interrupt
-        return interrupt
+    def set(self, name, interrupt=None):
+        if interrupt is None:
+            self.data[name] = Interrupt(self.master_interrupt)
+        else:
+            self.data[name] = interrupt
+        return self.data[name]
 
     def remove(self, name):
         del self.data[name]
@@ -80,6 +104,9 @@ class Interrupts(object):
     def values(self):
         return self.data.values()
 
+    def check(self, name):
+        return bool(self.get(name))
+
     def interrupt(self, name):
         self.data[name].set()
 
@@ -87,12 +114,18 @@ class Interrupts(object):
         for interrupt in self.data:
             interrupt.set()
 
+    def interrupt_all_processes(self):
+        self.master_interrupt.set()
+
     def reset(self, name):
-        self.data[name].clear()
+        self.data[name].reset()
 
     def reset_all(self):
         for interrupt in self.data:
-            interrupt.clear()
+            interrupt.reset()
+
+    def reset_all_processes(self):
+        self.master_interrupt.reset()
 
 
 class BroadcastPipe(object):
@@ -338,7 +371,7 @@ class InputsHandler(object):
         event = self.events[name]
         interrupt = self.interrupts.add(name)
         start_time = time.perf_counter()
-        while not interrupt.is_set():
+        while not interrupt:
             if event.is_set():
                 if reset:
                     event.clear()
@@ -348,15 +381,14 @@ class InputsHandler(object):
                     warnings.warn()
                     return None
                 time.sleep(interval)
-        warnings.warn()
-        interrupt.clear()
+        interrupt.reset()
         return None
 
     async def wait_for_event_async(self, name, reset=True, timeout=None, interval=0.0):
         event = self.events[name]
         interrupt = self.interrupts.add(name)
         start_time = time.perf_counter()
-        while not interrupt.is_set():
+        while not interrupt:
             if event.is_set():
                 if reset:
                     event.clear()
@@ -366,8 +398,7 @@ class InputsHandler(object):
                     warnings.warn()
                     return None
                 await asyncio.sleep(interval)
-        warnings.warn()
-        interrupt.clear()
+        interrupt.reset()
         return None
 
     # Queues
@@ -389,7 +420,7 @@ class InputsHandler(object):
         q = self.queues[name]
         interrupt = self.interrupts.add(name)
         start_time = time.perf_counter()
-        while not interrupt.is_set():
+        while not interrupt:
             try:
                 return q.get(block=False)
             except queue.Empty:
@@ -397,15 +428,14 @@ class InputsHandler(object):
                     warnings.warn()
                     return None
                 time.sleep(interval)
-        warnings.warn()
-        interrupt.clear()
+        interrupt.reset()
         return None
 
     async def wait_for_queue_async(self, name, timeout=None, interval=0.0):
         q = self.queues[name]
         interrupt = self.interrupts.add(name)
         start_time = time.perf_counter()
-        while not interrupt.is_set():
+        while not interrupt:
             try:
                 return q.get(block=False)
             except queue.Empty:
@@ -413,8 +443,7 @@ class InputsHandler(object):
                     warnings.warn()
                     return None
                 await asyncio.sleep(interval)
-        warnings.warn()
-        interrupt.clear()
+        interrupt.reset()
         return None
 
     # Pipes
@@ -436,7 +465,7 @@ class InputsHandler(object):
         connection = self.pipes[name]
         interrupt = self.interrupts.add(name)
         start_time = time.perf_counter()
-        while not interrupt.is_set():
+        while not interrupt:
             if connection.poll():
                 return connection.recv()
             else:
@@ -444,15 +473,14 @@ class InputsHandler(object):
                     warnings.warn()
                     return None
                 time.sleep(interval)
-        warnings.warn()
-        interrupt.clear()
+        interrupt.reset()
         return None
 
     async def wait_for_pipe_async(self, name, timeout=None, interval=0.0):
         connection = self.pipes[name]
         interrupt = self.interrupts.add(name)
         start_time = time.perf_counter()
-        while not interrupt.is_set():
+        while not interrupt:
             if connection.poll():
                 return connection.recv()
             else:
@@ -460,8 +488,7 @@ class InputsHandler(object):
                     warnings.warn()
                     return None
                 await asyncio.sleep(interval)
-        warnings.warn()
-        interrupt.clear()
+        interrupt.reset()
         return None
 
     # Broadcasters
@@ -489,7 +516,7 @@ class InputsHandler(object):
         connection = self.broadcasters[name]
         interrupt = self.interrupts.add(name)
         start_time = time.perf_counter()
-        while not interrupt.is_set():
+        while not interrupt:
             if connection.poll():
                 return connection.recv()
             else:
@@ -497,15 +524,14 @@ class InputsHandler(object):
                     warnings.warn()
                     return None
                 time.sleep(interval)
-        warnings.warn()
-        interrupt.clear()
+        interrupt.reset()
         return None
 
     async def wait_for_broadcast_async(self, name, timeout=None, interval=0.0):
         connection = self.broadcasters[name]
         interrupt = self.interrupts.add(name)
         start_time = time.perf_counter()
-        while not interrupt.is_set():
+        while not interrupt:
             if connection.poll():
                 return connection.recv()
             else:
@@ -513,8 +539,7 @@ class InputsHandler(object):
                     warnings.warn()
                     return None
                 await asyncio.sleep(interval)
-        warnings.warn()
-        interrupt.clear()
+        interrupt.reset()
         return None
 
     # All
@@ -632,7 +657,7 @@ class OutputsHandler(object):
         event = self.events[name]
         interrupt = self.interrupts.add(name)
         start_time = time.perf_counter()
-        while not interrupt.is_set():
+        while not interrupt:
             if not event.is_set():
                 return True
             else:
@@ -640,8 +665,7 @@ class OutputsHandler(object):
                     warnings.warn()
                     return None
                 time.sleep(interval)
-        warnings.warn()
-        interrupt.clear()
+        interrupt.reset()
         return None
 
     async def wait_for_event_clear_async(self, name, timeout=None, interval=0.0):
@@ -656,8 +680,7 @@ class OutputsHandler(object):
                     warnings.warn()
                     return None
                 await asyncio.sleep(interval)
-        warnings.warn()
-        interrupt.clear()
+        interrupt.reset()
         return None
 
     # Queues
@@ -913,8 +936,8 @@ class ProcessTask(object):
 
     def stop(self):
         self.stop_event.set()
-        self.inputs.stop_all()
-        self.outputs.stop_all()
+        self.inputs.stop_all_processes()
+        self.outputs.stop_all_processes()
 
     def reset(self):
         self.stop_event.clear()
