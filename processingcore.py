@@ -1460,8 +1460,8 @@ class ProcessingUnit(object):
 class ProcessingCluster(ProcessingUnit):
     DEFAULT_TASK = MultiUnitTask
 
-    def __init__(self, name=None, task=None, allow_setup=True, separate_process=False, init=True, daemon=False, **kwargs):
-        super().__init__(name, task, allow_setup, separate_process, init=False, daemon=daemon, **kwargs)
+    def __init__(self, name=None, task=None, allow_setup=True, allow_closure=True, separate_process=False, init=True, daemon=False, **kwargs):
+        super().__init__(name, task, allow_setup, allow_closure, separate_process, init=False, daemon=daemon, **kwargs)
 
         if init:
             self.construct(name)
