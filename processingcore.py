@@ -1491,8 +1491,8 @@ class ProcessingCluster(ProcessingUnit):
     def items(self):
         return self.task.items()
 
-    def append(self, name, unit, setup=False, start=True, kwargs={}):
-        self.task.append(name, unit, setup, start, kwargs)
+    def append(self, name, unit, start=True, setup=False, closure=False, kwargs={}):
+        self.task.append(name, unit, start, setup, closure, kwargs)
 
     def extend(self, units):
         self.task.extend(units=units)
