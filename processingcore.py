@@ -945,6 +945,86 @@ class ProcessTask(object):
         self.stop_event.clear()
 
 
+class ProcessTaskAsync(ProcessTask):
+    # Construction/Destruction
+    def __init__(self, name=None, allow_setup=True, allow_closure=True, init=True, kwargs={}):
+        super().__init__(name, allow_setup, allow_closure, init=False, kwargs=kwargs)
+        self.async_loop = asyncio.get_event_loop()
+
+        if init:
+            self.construct()
+
+    # Pickling
+    def __getstate__(self):
+        out_dict = self.__dict__
+        del out_dict["async_loop"]
+        return out_dict
+
+    def __setstate__(self, in_dict):
+        in_dict["async_loop"] = asyncio.get_event_loop()
+        self.__dict__ = in_dict
+
+    # Setup
+    async def setup(self):
+        pass
+
+    # Task
+    async def task(self, name=None):
+        pass
+
+    async def task_loop(self, **kwargs):
+        while not self.stop_event.is_set():
+            if not self.inputs.get_item("SelfStop"):
+                await asyncio.create_task(self._runtime_task_async(**kwargs))
+            else:
+                self.stop_event.set()
+
+    # Closure
+    async def closure(self):
+        pass
+
+    # Execution
+    async def run_coro(self, **kwargs):
+        # Optionally run Setup
+        if self.allow_setup:
+            await self._runtime_setup()
+
+        # Run Task
+        if kwargs:
+            self.kwargs = kwargs
+        await self._runtime_task(**kwargs)
+
+        # Optionally run Closure
+        if self.allow_closure:
+            await self._runtime_closure()
+
+    def run(self, **kwargs):
+        asyncio.run(self.run_coro(**kwargs))
+
+    def run_async_task(self, **kwargs):
+        return asyncio.create_task(self.run_async_coro(**kwargs))
+
+    async def start_coro(self, **kwargs):
+        # Optionally run Setup
+        if self.allow_setup:
+            await self._runtime_setup()
+
+        # Run Task Loop
+        if kwargs:
+            self.kwargs = kwargs
+        await self.task_loop(**kwargs)
+
+        # Optionally run Closure
+        if self.allow_closure:
+            await self._runtime_closure()
+
+    def start(self, **kwargs):
+        asyncio.run(self.start_coro(**kwargs))
+
+    def start_async_task(self, **kwargs):
+        return asyncio.create_task(self.start_async_coro(**kwargs))
+
+
 class MultiUnitTask(ProcessTask):
     SETTING_NAMES = {"unit", "start", "setup", "closure", "kwargs"}
 
