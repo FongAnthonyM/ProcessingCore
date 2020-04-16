@@ -1012,7 +1012,7 @@ class MultiUnitTask(ProcessTask):
             unit = self.units[name]
             if unit["setup"]:
                 unit["unit"].allow_setup = False
-                unit.setup()
+                unit["unit"].setup()
             if unit["closure"]:
                 unit["unit"].allow_closure = False
 
@@ -1059,7 +1059,7 @@ class MultiUnitTask(ProcessTask):
         for name in names:
             unit = self.units[name]
             if unit["closure"]:
-                unit.closure()
+                unit["unit"].closure()
 
     # Execution
     def stop(self, join=True, timeout=None):
