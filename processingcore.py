@@ -838,17 +838,15 @@ class ProcessTask(object):
     def set_closure(self, func):
         self._runtime_closure = func
 
-    # Task
+    # Setup
     def setup(self):
         pass
 
+    # Task
     def task(self, name=None):
         pass
 
     async def task_async(self, name=None):
-        pass
-
-    def closure(self):
         pass
 
     def task_loop(self, **kwargs):
@@ -864,6 +862,10 @@ class ProcessTask(object):
                 await asyncio.create_task(self._runtime_task_async(**kwargs))
             else:
                 self.stop_event.set()
+
+    # Closure
+    def closure(self):
+        pass
 
     # Execution
     def run(self, **kwargs):
@@ -944,7 +946,7 @@ class ProcessTask(object):
 
 
 class MultiUnitTask(ProcessTask):
-    SETTING_NAMES = {"unit", "setup", "start", "kwargs"}
+    SETTING_NAMES = {"unit", "start", "setup", "closure", "kwargs"}
 
     # Construction/Destruction
     def __init__(self, name=None, units={}, order=(), allow_setup=True, init=True, kwargs={}):
@@ -974,6 +976,7 @@ class MultiUnitTask(ProcessTask):
         if order:
             self.execution_order = order
 
+    # Container Methods
     def keys(self):
         return self.units.keys()
 
@@ -983,8 +986,8 @@ class MultiUnitTask(ProcessTask):
     def items(self):
         return self.units.items()
 
-    def append(self, name, unit, setup=False, start=True, kwargs={}):
-        self.units[name] = {"unit": unit, "setup": setup, "start": start, "kwargs": kwargs}
+    def append(self, name, unit, start=True, setup=False, closure=False, kwargs={}):
+        self.units[name] = {"unit": unit, "start": start, "setup": setup, "closure": closure, "kwargs": kwargs}
 
     def extend(self, units):
         for name, unit in units.items():
@@ -999,6 +1002,7 @@ class MultiUnitTask(ProcessTask):
     def clear(self):
         self.units.clear()
 
+    # Setup
     def setup(self):
         if not self.execution_order:
             names = self.units
@@ -1007,9 +1011,12 @@ class MultiUnitTask(ProcessTask):
         for name in names:
             unit = self.units[name]
             if unit["setup"]:
-                unit.allow_setup = False
+                unit["unit"].allow_setup = False
                 unit.setup()
+            if unit["closure"]:
+                unit["unit"].allow_closure = False
 
+    # Task
     def task(self, name=None):
         if not self.execution_order:
             names = self.units
@@ -1043,6 +1050,18 @@ class MultiUnitTask(ProcessTask):
         for task in tasks:
             await task
 
+    # Closure
+    def closure(self):
+        if not self.execution_order:
+            names = self.units
+        else:
+            names = self.execution_order
+        for name in names:
+            unit = self.units[name]
+            if unit["closure"]:
+                unit.closure()
+
+    # Execution
     def stop(self, join=True, timeout=None):
         super().stop()
         if not self.execution_order:
@@ -1214,21 +1233,24 @@ class ProcessingUnit(object):
     DEFAULT_TASK = ProcessTask
 
     # Construction/Destruction
-    def __init__(self, name=None, task=None, allow_setup=True, separate_process=False, init=True, daemon=False, **kwargs):
+    def __init__(self, name=None, task=None, allow_setup=True, allow_closure=True, separate_process=False, init=True, daemon=False, **kwargs):
         self.name = name
+        self.allow_setup = allow_setup
+        self.allow_closure = allow_closure
+
         self.separate_process = separate_process
         self._is_processing = False
-        self.allow_setup = allow_setup
+        self.process = None
+        self.processing_pool = None
+
+        self.task = None
 
         self._runtime_setup = self.setup
-        self.task = task
         self._runtime_task = None
-
-        self.processing_pool = None
-        self.process = None
+        self._runtime_closure = self.closure
 
         if init:
-            self.construct(name=name, daemon=daemon, **kwargs)
+            self.construct(name=name, task=task, daemon=daemon, **kwargs)
 
     @property
     def is_processing(self):
@@ -1302,6 +1324,14 @@ class ProcessingUnit(object):
         else:
             self.task = task
 
+    # Setup
+    def setup(self):
+        pass
+
+    def use_task_setup(self):
+        self.task.allow_setup = False
+        self._runtime_setup = self.task.setup
+
     # Task
     def default_task(self):
         self.task = self.DEFAULT_TASK(name=self.name)
@@ -1318,36 +1348,43 @@ class ProcessingUnit(object):
     def set_process(self, process):
         self.process = process
 
-    # Setup
-    def setup(self):
+    # Closure
+    def closure(self):
         pass
-
-    def use_task_setup(self):
-        self.task.allow_setup = False
-        self._runtime_setup = self.task.setup
 
     # Execution
     def run(self, **kwargs):
+        # Optionally run Setup
         if self.allow_setup:
             self._runtime_setup()
 
+        # Run Task
         if self.separate_process:
             self.process.target_object_method(self.task, "run", kwargs=kwargs)
             self.process.start()
         else:
             self.task.run(**kwargs)
 
+        # Optionally run Closure
+        if self.allow_closure:
+            self._runtime_closure()
+
     async def run_async_coro(self, **kwargs):
+        # Optionally run Setup
         if self.allow_setup:
             self._runtime_setup()
 
+        # Run Task
         if self.separate_process:
-            self._runtime_setup()
             self.process.target_object_method(self.task, "run_async", kwargs=kwargs)
             self.process.start()
             # await join() process?
         else:
             await self.task.run_async_coro(**kwargs)
+
+        # Optionally run Closure
+        if self.allow_closure:
+            self._runtime_closure()
 
     def run_async(self, **kwargs):
         asyncio.run(self.run_async_coro(**kwargs))
@@ -1356,26 +1393,37 @@ class ProcessingUnit(object):
         return asyncio.create_task(self.run_async_coro(**kwargs))
 
     def start(self, **kwargs):
+        # Optionally run Setup
         if self.allow_setup:
             self._runtime_setup()
 
+        # Run Task
         if self.separate_process:
             self.process.target_object_method(self.task, "start", kwargs=kwargs)
             self.process.start()
         else:
             self.task.start(**kwargs)
 
+        # Optionally run Closure
+        if self.allow_closure:
+            self._runtime_closure()
+
     async def start_async_coro(self, **kwargs):
+        # Optionally run Setup
         if self.allow_setup:
             self._runtime_setup()
 
+        # Run Task
         if self.separate_process:
-            self._runtime_setup()
             self.process.target_object_method(self.task, "start_async", kwargs=kwargs)
             self.process.start()
             # await join() process?
         else:
             await self.task.start_async_coro(**kwargs)
+
+        # Optionally run Closure
+        if self.allow_closure:
+            self._runtime_closure()
 
     def start_async(self, **kwargs):
         asyncio.run(self.start_async_coro(**kwargs))
