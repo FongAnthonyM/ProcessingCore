@@ -1322,7 +1322,7 @@ class ProcessingUnit(object):
         self.name = name
         self.allow_setup = allow_setup
         self.allow_closure = allow_closure
-        self.await_closure = False
+        self.await_closure = True
 
         self.separate_process = separate_process
         self._is_processing = False
