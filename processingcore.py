@@ -793,8 +793,8 @@ class Task(object):
 
     # State Methods
     def is_async(self):
-        if asyncio.iscoroutine(self._execute_setup) or asyncio.iscoroutine(self._execute_closure) or \
-           asyncio.iscoroutine(self._execute_task):
+        if asyncio.iscoroutinefunction(self._execute_setup) or asyncio.iscoroutinefunction(self._execute_closure) or \
+           asyncio.iscoroutinefunction(self._execute_task):
             return True
         else:
             return False
@@ -888,7 +888,7 @@ class Task(object):
     async def run_coro(self, **kwargs):
         # Optionally run Setup
         if self.allow_setup:
-            if asyncio.iscoroutine(self._execute_setup):
+            if asyncio.iscoroutinefunction(self._execute_setup):
                 await self._execute_setup()
             else:
                 self._execute_setup()
@@ -896,14 +896,14 @@ class Task(object):
         # Run Task
         if kwargs:
             self.kwargs = kwargs
-        if asyncio.iscoroutine(self._execute_task):
+        if asyncio.iscoroutinefunction(self._execute_task):
             await self._execute_task(**kwargs)
         else:
             self._execute_task(**kwargs)
 
         # Optionally run Closure
         if self.allow_closure:
-            if asyncio.iscoroutine(self._execute_closure):
+            if asyncio.iscoroutinefunction(self._execute_closure):
                 await self._execute_closure()
             else:
                 self._execute_closure()
@@ -913,7 +913,7 @@ class Task(object):
 
         # Optionally run Setup
         if self.allow_setup:
-            if asyncio.iscoroutine(self._execute_setup):
+            if asyncio.iscoroutinefunction(self._execute_setup):
                 await self._execute_setup()
             else:
                 self._execute_setup()
@@ -921,14 +921,14 @@ class Task(object):
         # Run Task
         if kwargs:
             self.kwargs = kwargs
-        if asyncio.iscoroutine(self._execute_task):
+        if asyncio.iscoroutinefunction(self._execute_task):
             await self._execute_task_loop(**kwargs)
         else:
             self._execute_task_loop(**kwargs)
 
         # Optionally run Closure
         if self.allow_closure:
-            if asyncio.iscoroutine(self._execute_closure):
+            if asyncio.iscoroutinefunction(self._execute_closure):
                 await self._execute_closure()
             else:
                 self._execute_closure()
@@ -945,10 +945,10 @@ class Task(object):
 
     def prepare_task_loop(self):
         if self._execute_task_loop == self.task_loop:
-            if asyncio.iscoroutine(self._execute_task):
+            if asyncio.iscoroutinefunction(self._execute_task):
                 self._execute_task_loop = self.task_loop_async
         elif self._execute_task_loop == self.task_loop_async:
-            if not asyncio.iscoroutine(self._execute_task):
+            if not asyncio.iscoroutinefunction(self._execute_task):
                 self._execute_task_loop = self.task_loop
 
     def set_closure(self, func):
@@ -1417,7 +1417,7 @@ class ProcessingUnit(object):
 
     # State
     def is_async(self):
-        if asyncio.iscoroutine(self._execute_setup) or asyncio.iscoroutine(self._execute_closure):
+        if asyncio.iscoroutinefunction(self._execute_setup) or asyncio.iscoroutinefunction(self._execute_closure):
             return True
         elif not self.separate_process and self.task_object.is_async():
             return True
@@ -1502,7 +1502,7 @@ class ProcessingUnit(object):
         self._joined = False
         # Optionally run Setup
         if self.allow_setup:
-            if asyncio.iscoroutine(self._execute_setup):
+            if asyncio.iscoroutinefunction(self._execute_setup):
                 await self._execute_setup()
             else:
                 self._execute_setup()
@@ -1524,7 +1524,7 @@ class ProcessingUnit(object):
                         await self.process.join_async()
                     else:
                         warnings.warn()
-                if asyncio.iscoroutine(self._execute_closure):
+                if asyncio.iscoroutinefunction(self._execute_closure):
                     await self._execute_closure()
                 else:
                     self._execute_closure()
@@ -1534,7 +1534,7 @@ class ProcessingUnit(object):
         self._joined = False
         # Optionally run Setup
         if self.allow_setup:
-            if asyncio.iscoroutine(self._execute_setup):
+            if asyncio.iscoroutinefunction(self._execute_setup):
                 await self._execute_setup()
             else:
                 self._execute_setup()
@@ -1556,7 +1556,7 @@ class ProcessingUnit(object):
                     await self.process.join_async()
                 else:
                     warnings.warn()
-            if asyncio.iscoroutine(self._execute_closure):
+            if asyncio.iscoroutinefunction(self._execute_closure):
                 await self._execute_closure()
             else:
                 self._execute_closure()
