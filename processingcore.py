@@ -754,10 +754,11 @@ class OutputsHandler(object):
         self.interrupts.interrupt_all_processes()
 
 
-class ProcessTask(object):
+class Task(object):
     # Construction/Destruction
     def __init__(self, name=None, allow_setup=True, allow_closure=True, init=True, kwargs={}):
         self.name = name
+        self.async_loop = asyncio.get_event_loop()
         self.kwargs = kwargs
         self.allow_setup = allow_setup
         self.allow_closure = allow_closure
@@ -776,9 +777,27 @@ class ProcessTask(object):
         if init:
             self.construct()
 
+    # Pickling
+    def __getstate__(self):
+        out_dict = self.__dict__
+        del out_dict["async_loop"]
+        return out_dict
+
+    def __setstate__(self, in_dict):
+        in_dict["async_loop"] = asyncio.get_event_loop()
+        self.__dict__ = in_dict
+
     # Constructors/Destructors
     def construct(self):
         self.construct_io()
+
+    # State Methods
+    def is_async(self):
+        if asyncio.iscoroutine(self._execute_setup) or asyncio.iscoroutine(self._execute_closure) or \
+           asyncio.iscoroutine(self._execute_task):
+            return True
+        else:
+            return False
 
     # IO
     def construct_io(self):
@@ -823,25 +842,19 @@ class ProcessTask(object):
             else:
                 self.stop_event.set()
 
+    async def task_loop_async(self, **kwargs):
+        while not self.stop_event.is_set():
+            if not self.inputs.get_item("SelfStop"):
+                await asyncio.create_task(self._execute_task(**kwargs))
+            else:
+                self.stop_event.set()
+
     # Closure
     def closure(self):
         pass
 
-    # Set Execution Operators
-    def set_setup(self, func):
-        self._execute_setup = func
-
-    def set_task(self, func):
-        self._execute_task = func
-
-    def set_task_loop(self, func):
-        self._execute_task_loop = func
-
-    def set_closure(self, func):
-        self._execute_closure = func
-
-    # Execution
-    def run(self, **kwargs):
+    # Normal Execute Methods
+    def run_normal(self, **kwargs):
         # Optionally run Setup
         if self.allow_setup:
             self._execute_setup()
@@ -855,7 +868,9 @@ class ProcessTask(object):
         if self.allow_closure:
             self._execute_closure()
 
-    def start(self, **kwargs):
+    def start_normal(self, **kwargs):
+        self.prepare_task_loop()
+
         # Optionally run Setup
         if self.allow_setup:
             self._execute_setup()
@@ -869,6 +884,95 @@ class ProcessTask(object):
         if self.allow_closure:
             self._execute_closure()
 
+    # Async Execute Methods
+    async def run_coro(self, **kwargs):
+        # Optionally run Setup
+        if self.allow_setup:
+            if asyncio.iscoroutine(self._execute_setup):
+                await self._execute_setup()
+            else:
+                self._execute_setup()
+
+        # Run Task
+        if kwargs:
+            self.kwargs = kwargs
+        if asyncio.iscoroutine(self._execute_task):
+            await self._execute_task(**kwargs)
+        else:
+            self._execute_task(**kwargs)
+
+        # Optionally run Closure
+        if self.allow_closure:
+            if asyncio.iscoroutine(self._execute_closure):
+                await self._execute_closure()
+            else:
+                self._execute_closure()
+
+    async def start_coro(self, **kwargs):
+        self.prepare_task_loop()
+
+        # Optionally run Setup
+        if self.allow_setup:
+            if asyncio.iscoroutine(self._execute_setup):
+                await self._execute_setup()
+            else:
+                self._execute_setup()
+
+        # Run Task
+        if kwargs:
+            self.kwargs = kwargs
+        if asyncio.iscoroutine(self._execute_task):
+            await self._execute_task_loop(**kwargs)
+        else:
+            self._execute_task_loop(**kwargs)
+
+        # Optionally run Closure
+        if self.allow_closure:
+            if asyncio.iscoroutine(self._execute_closure):
+                await self._execute_closure()
+            else:
+                self._execute_closure()
+
+    # Set Execution Methods
+    def set_setup(self, func):
+        self._execute_setup = func
+
+    def set_task(self, func):
+        self._execute_task = func
+
+    def set_task_loop(self, func):
+        self._execute_task_loop = func
+
+    def prepare_task_loop(self):
+        if self._execute_task_loop == self.task_loop:
+            if asyncio.iscoroutine(self._execute_task):
+                self._execute_task_loop = self.task_loop_async
+        elif self._execute_task_loop == self.task_loop_async:
+            if not asyncio.iscoroutine(self._execute_task):
+                self._execute_task_loop = self.task_loop
+
+    def set_closure(self, func):
+        self._execute_closure = func
+
+    # Execution
+    def run(self, **kwargs):
+        if self.is_async():
+            asyncio.run(self.run_coro(**kwargs))
+        else:
+            self.run_normal(**kwargs)
+
+    def run_async_task(self, **kwargs):
+        return asyncio.create_task(self.run_coro(**kwargs))
+
+    def start(self, **kwargs):
+        if self.is_async():
+            asyncio.run(self.start_coro(**kwargs))
+        else:
+            self.start_normal(**kwargs)
+
+    def start_async_task(self, **kwargs):
+        return asyncio.create_task(self.start_coro(**kwargs))
+
     def stop(self):
         self.stop_event.set()
         self.inputs.stop_all()
@@ -878,88 +982,7 @@ class ProcessTask(object):
         self.stop_event.clear()
 
 
-class ProcessTaskAsync(ProcessTask):
-    # Construction/Destruction
-    def __init__(self, name=None, allow_setup=True, allow_closure=True, init=True, kwargs={}):
-        super().__init__(name, allow_setup, allow_closure, init=False, kwargs=kwargs)
-
-        self.async_loop = asyncio.get_event_loop()
-
-        if init:
-            self.construct()
-
-    # Pickling
-    def __getstate__(self):
-        out_dict = self.__dict__
-        del out_dict["async_loop"]
-        return out_dict
-
-    def __setstate__(self, in_dict):
-        in_dict["async_loop"] = asyncio.get_event_loop()
-        self.__dict__ = in_dict
-
-    # Setup
-    async def setup(self):
-        pass
-
-    # Task
-    async def task(self, name=None):
-        pass
-
-    async def task_loop(self, **kwargs):
-        while not self.stop_event.is_set():
-            if not self.inputs.get_item("SelfStop"):
-                await asyncio.create_task(self._execute_task(**kwargs))
-            else:
-                self.stop_event.set()
-
-    # Closure
-    async def closure(self):
-        pass
-
-    # Execution
-    async def run_coro(self, **kwargs):
-        # Optionally run Setup
-        if self.allow_setup:
-            await self._execute_setup()
-
-        # Run Task
-        if kwargs:
-            self.kwargs = kwargs
-        await self._execute_task(**kwargs)
-
-        # Optionally run Closure
-        if self.allow_closure:
-            await self._execute_closure()
-
-    def run(self, **kwargs):
-        asyncio.run(self.run_coro(**kwargs))
-
-    def run_async_task(self, **kwargs):
-        return asyncio.create_task(self.run_coro(**kwargs))
-
-    async def start_coro(self, **kwargs):
-        # Optionally run Setup
-        if self.allow_setup:
-            await self._execute_setup()
-
-        # Run Task Loop
-        if kwargs:
-            self.kwargs = kwargs
-        await self._execute_task_loop(**kwargs)
-
-        # Optionally run Closure
-        if self.allow_closure:
-            await self._execute_closure()
-
-    def start(self, **kwargs):
-        asyncio.run(self.start_coro(**kwargs))
-
-    def start_async_task(self, **kwargs):
-        return asyncio.create_task(self.start_coro(**kwargs))
-
-
-class MultiUnitTask(ProcessTask):
+class MultiUnitTask(Task):
     SETTING_NAMES = {"unit", "start", "setup", "closure", "kwargs"}
 
     # Construction/Destruction
@@ -983,6 +1006,7 @@ class MultiUnitTask(ProcessTask):
         else:
             warnings.warn()
 
+    # Constructors/Destructors
     def construct(self, units={}, order=()):
         super().construct()
         if units:
@@ -1016,6 +1040,18 @@ class MultiUnitTask(ProcessTask):
     def clear(self):
         self.units.clear()
 
+    def all_async(self):
+        for unit in self.units.values():
+            if not unit["unit"].is_async():
+                return False
+        return True
+
+    def any_async(self):
+        for unit in self.units.values():
+            if unit["unit"].is_async():
+                return True
+        return False
+
     # Setup
     def setup(self):
         if not self.execution_order:
@@ -1046,6 +1082,30 @@ class MultiUnitTask(ProcessTask):
             else:
                 unit.run(**kwargs)
 
+    async def task_async(self, name=None):
+        tasks = []
+        if not self.execution_order:
+            names = self.units
+        else:
+            names = self.execution_order
+
+        for name in names:
+            unit = self.units[name]["unit"]
+            kwargs = self.units[name]["kwargs"]
+            start = self.units[name]["start"]
+            if start:
+                if unit.is_async():
+                    tasks.append(unit.start_async_task(**kwargs))
+                else:
+                    unit.start(**kwargs)
+            else:
+                if unit.is_async():
+                    tasks.append(unit.run_async_task(**kwargs))
+                else:
+                    unit.run(**kwargs)
+        for task in tasks:
+            await task
+
     # Closure
     def closure(self):
         if not self.execution_order:
@@ -1057,7 +1117,32 @@ class MultiUnitTask(ProcessTask):
             if unit["closure"]:
                 unit["unit"].closure()
 
+    # Set Execution Methods
+    def prepare_task(self):
+        if self._execute_task == self.task:
+            if self.any_async():
+                self._execute_task = self.task_async
+        elif self._execute_task == self.task_async:
+            if not self.any_async():
+                self._execute_task = self.task
+
     # Execution
+    def run(self, **kwargs):
+        self.prepare_task()
+        super().run(**kwargs)
+
+    def run_async_task(self, **kwargs):
+        self.prepare_task()
+        return super().run_async_task(**kwargs)
+
+    def start(self, **kwargs):
+        self.prepare_task()
+        super().start(**kwargs)
+
+    def start_async_task(self, **kwargs):
+        self.prepare_task()
+        return super().start_async_task(**kwargs)
+
     def stop(self, join=True, timeout=None):
         super().stop()
         if not self.execution_order:
@@ -1080,41 +1165,6 @@ class MultiUnitTask(ProcessTask):
 
         for name in names:
             self.units[name]["unit"].reset()
-
-
-class MultiUnitTaskAsync(MultiUnitTask, ProcessTaskAsync):
-    def __init__(self, name=None, units={}, order=(), allow_setup=True, allow_closure=True, init=True, kwargs={}):
-        super().__init__(name, units=units, order=order, allow_setup=allow_setup, allow_closure=allow_closure, init=False, kwargs=kwargs)
-
-        if init:
-            self.construct(units=units, order=order)
-
-    # Setup
-    async def setup(self):
-        MultiUnitTask.setup()
-
-    # Task
-    async def task(self, name=None):
-        tasks = []
-        if not self.execution_order:
-            names = self.units
-        else:
-            names = self.execution_order
-
-        for name in names:
-            unit = self.units[name]["unit"]
-            kwargs = self.units[name]["kwargs"]
-            start = self.units[name]["start"]
-            if start:
-                tasks.append(unit.start_async_task(**kwargs))
-            else:
-                tasks.append(unit.run_async_task(**kwargs))
-        for task in tasks:
-            await task
-
-    # Closure
-    async def closure(self):
-        MultiUnitTask.closure()
 
 
 class SeparateProcess(object):
@@ -1233,14 +1283,14 @@ class SeparateProcess(object):
         self.process.start()
 
     def join(self, timeout=None):
-        self.process.join(timeout=timeout)
+        return self.process.join(timeout=timeout)
 
     async def join_async(self, timeout=None, interval=0.0):
         start_time = time.perf_counter()
         while self.process.join(0) is None:
             await asyncio.sleep(interval)
             if timeout is not None and (time.perf_counter() - start_time) >= timeout:
-                break
+                return None
 
     def restart(self):
         if isinstance(self.process, Process):
@@ -1261,24 +1311,25 @@ class SeparateProcess(object):
 
 
 class ProcessingUnit(object):
-    DEFAULT_TASK = ProcessTask
+    DEFAULT_TASK = Task
 
     # Construction/Destruction
-    def __init__(self, name=None, task=None, allow_setup=True, allow_closure=True, separate_process=False, init=True, daemon=False, **kwargs):
+    def __init__(self, name=None, task=None, allow_setup=True, allow_closure=True, separate_process=False, init=True,
+                 daemon=False, **kwargs):
         self.name = name
         self.allow_setup = allow_setup
         self.allow_closure = allow_closure
+        self.await_closure = False
 
         self.separate_process = separate_process
         self._is_processing = False
         self.process = None
         self.processing_pool = None
 
-        self.task = None
-
-        self._runtime_setup = self.setup
-        self._runtime_task = None
-        self._runtime_closure = self.closure
+        self._execute_setup = self.setup
+        self._task_object = None
+        self._execute_closure = self.closure
+        self._joined = True
 
         if init:
             self.construct(name=name, task=task, daemon=daemon, **kwargs)
@@ -1290,85 +1341,90 @@ class ProcessingUnit(object):
         return self._is_processing
 
     @property
+    def task_object(self):
+        if self.is_processing:
+            warnings.warn()
+        return self._task_object
+
+    @task_object.setter
+    def task_object(self, value):
+        if self.is_processing:
+            warnings.warn()
+        self._task_object = value
+
+    @property
     def events(self):
-        if self.task is not None:
-            return self.task.events
+        if self.task_object is not None:
+            return self.task_object.events
         else:
             return None
 
     @events.setter
     def events(self, value):
-        if self.task is not None:
-            self.task.events = value
+        if self.task_object is not None:
+            self.task_object.events = value
         else:
             raise NameError
 
     @property
     def locks(self):
-        if self.task is not None:
-            return self.task.locks
+        if self.task_object is not None:
+            return self.task_object.locks
         else:
             return None
 
     @locks.setter
     def locks(self, value):
-        if self.task is not None:
-            self.task.locks = value
+        if self.task_object is not None:
+            self.task_object.locks = value
         else:
             raise NameError
 
     @property
     def inputs(self):
-        if self.task is not None:
-            return self.task.inputs
+        if self.task_object is not None:
+            return self.task_object.inputs
         else:
             return None
 
     @inputs.setter
     def inputs(self, value):
-        if self.task is not None:
-            self.task.inputs = value
+        if self.task_object is not None:
+            self.task_object.inputs = value
         else:
             raise NameError
 
     @property
     def outputs(self):
-        if self.task is not None:
-            return self.task.outputs
+        if self.task_object is not None:
+            return self.task_object.outputs
         else:
             return None
 
     @outputs.setter
     def outputs(self, value):
-        if self.task is not None:
-            self.task.outputs = value
+        if self.task_object is not None:
+            self.task_object.outputs = value
         else:
             raise NameError
 
     # Constructors
     def construct(self, name=None, task=None, daemon=False, **kwargs):
         if self.separate_process:
-            self.new_process(name=name, daemon=True, **kwargs)
+            self.new_process(name=name, daemon=daemon, **kwargs)
         if task is None:
-            if self.task is None:
-                self.default_task()
+            if self.task_object is None:
+                self.default_task_object()
         else:
-            self.task = task
+            self.task_object = task
 
-    # Setup
-    def setup(self):
-        pass
-
-    def use_task_setup(self):
-        self.task.allow_setup = False
-        self._runtime_setup = self.task.setup
-
-    # Task
-    def default_task(self):
-        self.task = self.DEFAULT_TASK(name=self.name)
-
-    def set_task(self, task):
-        self.task = task
+    def is_async(self):
+        if asyncio.iscoroutine(self._execute_setup) or asyncio.iscoroutine(self._execute_closure):
+            return True
+        elif not self.separate_process and self.task_object.is_async():
+            return True
+        else:
+            return False
 
     # Process
     def new_process(self, name=None, daemon=False, kwargs={}):
@@ -1379,109 +1435,195 @@ class ProcessingUnit(object):
     def set_process(self, process):
         self.process = process
 
+    # Setup
+    def setup(self):
+        pass
+
+    # Task
+    def default_task_object(self):
+        self.task_object = self.DEFAULT_TASK(name=self.name)
+
     # Closure
     def closure(self):
         pass
 
+    # Normal Execution Methods
+    def run_normal(self, **kwargs):
+        self._joined = False
+        # Optionally run Setup
+        if self.allow_setup:
+            self._execute_setup()
+
+        # Run Task
+        if self.separate_process:
+            self.process.target_object_method(self.task_object, "run", kwargs=kwargs)
+            self.process.start()
+        else:
+            self.task_object.run(**kwargs)
+
+        # Optionally run Closure
+        if self.allow_closure:
+            if self.separate_process:
+                if self.await_closure:
+                    self.process.join()
+                else:
+                    warnings.warn()
+            self._execute_closure()
+        self._joined = True
+
+    def start_normal(self, **kwargs):
+        self._joined = False
+        # Optionally run Setup
+        if self.allow_setup:
+            self._execute_setup()
+
+        # Run Task
+        if self.separate_process:
+            self.process.target_object_method(self.task_object, "start", kwargs=kwargs)
+            self.process.start()
+        else:
+            self.task_object.start(**kwargs)
+
+        # Optionally run Closure
+        if self.allow_closure:
+            if self.separate_process:
+                if self.await_closure:
+                    self.process.join()
+                else:
+                    warnings.warn()
+            self._execute_closure()
+        self._joined = True
+
+    # Async Execute Methods
+    async def run_coro(self, **kwargs):
+        self._joined = False
+        # Optionally run Setup
+        if self.allow_setup:
+            if asyncio.iscoroutine(self._execute_setup):
+                await self._execute_setup()
+            else:
+                self._execute_setup()
+
+        # Run Task
+        if self.separate_process:
+            self.process.target_object_method(self.task_object, "run", kwargs=kwargs)
+            self.process.start()
+        else:
+            if self.task_object.is_async():
+                await self.task_object.run_coro(**kwargs)
+            else:
+                self.task_object.run(**kwargs)
+
+            # Optionally run Closure
+            if self.allow_closure:
+                if self.separate_process:
+                    if self.await_closure:
+                        await self.process.join_async()
+                    else:
+                        warnings.warn()
+                if asyncio.iscoroutine(self._execute_closure):
+                    await self._execute_closure()
+                else:
+                    self._execute_closure()
+        self._joined = True
+
+    async def start_coro(self, **kwargs):
+        self._joined = False
+        # Optionally run Setup
+        if self.allow_setup:
+            if asyncio.iscoroutine(self._execute_setup):
+                await self._execute_setup()
+            else:
+                self._execute_setup()
+
+        # Run Task
+        if self.separate_process:
+            self.process.target_object_method(self.task_object, "start", kwargs=kwargs)
+            self.process.start()
+        else:
+            if self.task_object.is_async():
+                await self.task_object.start_coro(**kwargs)
+            else:
+                self.task_object.start(**kwargs)
+
+        # Optionally run Closure
+        if self.allow_closure:
+            if self.separate_process:
+                if self.await_closure:
+                    await self.process.join_async()
+                else:
+                    warnings.warn()
+            if asyncio.iscoroutine(self._execute_closure):
+                await self._execute_closure()
+            else:
+                self._execute_closure()
+        self._joined = True
+
+    # Set Execution Methods
+    def use_task_setup(self):
+        self.task_object.allow_setup = False
+        self._execute_setup = self.task_object.setup
+
+    def use_task_closure(self):
+        self.task_object.allow_closure = False
+        self._execute_closure = self.task_object.closure
+
     # Execution
     def run(self, **kwargs):
-        # Optionally run Setup
-        if self.allow_setup:
-            self._runtime_setup()
-
-        # Run Task
-        if self.separate_process:
-            self.process.target_object_method(self.task, "run", kwargs=kwargs)
-            self.process.start()
+        if self.is_async():
+            asyncio.run(self.run_coro(**kwargs))
         else:
-            self.task.run(**kwargs)
-
-        # Optionally run Closure
-        if self.allow_closure:
-            self._runtime_closure()
-
-    async def run_async_coro(self, **kwargs):
-        # Optionally run Setup
-        if self.allow_setup:
-            self._runtime_setup()
-
-        # Run Task
-        if self.separate_process:
-            self.process.target_object_method(self.task, "run_async", kwargs=kwargs)
-            self.process.start()
-            # await join() process?
-        else:
-            await self.task.run_async_coro(**kwargs)
-
-        # Optionally run Closure
-        if self.allow_closure:
-            self._runtime_closure()
-
-    def run_async(self, **kwargs):
-        asyncio.run(self.run_async_coro(**kwargs))
+            self.run_normal(**kwargs)
 
     def run_async_task(self, **kwargs):
-        return asyncio.create_task(self.run_async_coro(**kwargs))
+        return asyncio.create_task(self.run_coro(**kwargs))
 
     def start(self, **kwargs):
-        # Optionally run Setup
-        if self.allow_setup:
-            self._runtime_setup()
-
-        # Run Task
-        if self.separate_process:
-            self.process.target_object_method(self.task, "start", kwargs=kwargs)
-            self.process.start()
+        if self.is_async():
+            asyncio.run(self.start_coro(**kwargs))
         else:
-            self.task.start(**kwargs)
-
-        # Optionally run Closure
-        if self.allow_closure:
-            self._runtime_closure()
-
-    async def start_async_coro(self, **kwargs):
-        # Optionally run Setup
-        if self.allow_setup:
-            self._runtime_setup()
-
-        # Run Task
-        if self.separate_process:
-            self.process.target_object_method(self.task, "start_async", kwargs=kwargs)
-            self.process.start()
-            # await join() process?
-        else:
-            await self.task.start_async_coro(**kwargs)
-
-        # Optionally run Closure
-        if self.allow_closure:
-            self._runtime_closure()
-
-    def start_async(self, **kwargs):
-        asyncio.run(self.start_async_coro(**kwargs))
+            self.start_normal(**kwargs)
 
     def start_async_task(self, **kwargs):
-        return asyncio.create_task(self.start_async_coro(**kwargs))
+        return asyncio.create_task(self.start_coro(**kwargs))
+
+    def join(self, timeout=None):
+        start_time = time.perf_counter()
+        while not self._joined:
+            if timeout is not None and (time.perf_counter() - start_time) >= timeout:
+                return None
+
+        timeout = timeout - (time.perf_counter() - start_time)
+
+        if self.separate_process:
+            self.process.join(timeout=timeout)
+        return None
+
+    async def join_async(self, timeout=None, interval=0.0):
+        start_time = time.perf_counter()
+        while not self._joined:
+            await asyncio.sleep(interval)
+            if timeout is not None and (time.perf_counter() - start_time) >= timeout:
+                return None
+
+        timeout = timeout - (time.perf_counter() - start_time)
+
+        if self.separate_process:
+            await self.process.join_async(timeout=timeout, interval=interval)
+        return None
 
     def stop(self, join=True, timeout=None):
-        self.task.stop()
+        self.task_object.stop()
         if join:
             self.join(timeout=timeout)
 
     async def stop_async(self, join=True, timeout=None, interval=0.0):
-        self.task.stop()
+        self.task_object.stop()
         if join:
             await self.join_async(timeout=timeout, interval=interval)
 
-    def join(self, timeout=None):
-        if self.separate_process:
-            self.process.join(timeout=timeout)
-
-    async def join_async(self, timeout=None, interval=0.0):
-        if self.separate_process:
-            await self.process.join_async(timeout=timeout, interval=interval)
-
     def reset(self):
-        self.task.reset()
+        self.task_object.reset()
 
     def terminate(self):
         if self.separate_process:
@@ -1491,7 +1633,8 @@ class ProcessingUnit(object):
 class ProcessingCluster(ProcessingUnit):
     DEFAULT_TASK = MultiUnitTask
 
-    def __init__(self, name=None, task=None, allow_setup=True, allow_closure=True, separate_process=False, init=True, daemon=False, **kwargs):
+    def __init__(self, name=None, task=None, allow_setup=True, allow_closure=True, separate_process=False, init=True,
+                 daemon=False, **kwargs):
         super().__init__(name, task, allow_setup, allow_closure, separate_process, init=False, daemon=daemon, **kwargs)
 
         if init:
@@ -1499,43 +1642,43 @@ class ProcessingCluster(ProcessingUnit):
 
     @property
     def execution_order(self):
-        return self.task.execution_order
+        return self.task_object.execution_order
 
     @execution_order.setter
     def execution_order(self, value):
-        self.task.execution_order = value
+        self.task_object.execution_order = value
 
     @property
     def units(self):
-        return self.task.units
+        return self.task_object.units
 
     @units.setter
     def units(self, value):
-        self.task.units = value
+        self.task_object.units = value
 
     def keys(self):
-        return self.task.keys()
+        return self.task_object.keys()
 
     def values(self):
-        return self.task.values()
+        return self.task_object.values()
 
     def items(self):
-        return self.task.items()
+        return self.task_object.items()
 
     def append(self, name, unit, start=True, setup=False, closure=False, kwargs={}):
-        self.task.append(name, unit, start, setup, closure, kwargs)
+        self.task_object.append(name, unit, start, setup, closure, kwargs)
 
     def extend(self, units):
-        self.task.extend(units=units)
+        self.task_object.extend(units=units)
 
     def pop(self, name):
-        return self.task.pop(name)
+        return self.task_object.pop(name)
 
     def clear(self):
-        self.task.clear()
+        self.task_object.clear()
 
     def stop(self, join=True, timeout=None):
-        self.task.stop(join=join, timeout=timeout)
+        self.task_object.stop(join=join, timeout=timeout)
         if join:
             self.join(timeout=timeout)
 
