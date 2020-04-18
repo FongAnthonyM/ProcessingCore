@@ -1339,13 +1339,13 @@ class ProcessingUnit(object):
 
     @property
     def task_object(self):
-        if self.is_processing:
+        if self.is_processing():
             warnings.warn()
         return self._task_object
 
     @task_object.setter
     def task_object(self, value):
-        if self.is_processing:
+        if self.is_processing():
             warnings.warn()
         self._task_object = value
 
@@ -1415,6 +1415,7 @@ class ProcessingUnit(object):
         else:
             self.task_object = task
 
+    # State
     def is_async(self):
         if asyncio.iscoroutine(self._execute_setup) or asyncio.iscoroutine(self._execute_closure):
             return True
