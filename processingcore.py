@@ -1236,10 +1236,6 @@ class SeparateProcess(object):
             self.process = Process(target=self._target, name=self.name, daemon=self.daemon, kwargs=value)
 
     @property
-    def is_alive(self):
-        return self.process.is_alive()
-
-    @property
     def process(self):
         return self._process
 
@@ -1254,6 +1250,13 @@ class SeparateProcess(object):
     # Constructors
     def construct(self, target=None, daemon=False, **kwargs):
         self.create_process(target, daemon, **kwargs)
+
+    # State
+    def is_alive(self):
+        if self.process is None:
+            return False
+        else:
+            return self.process.is_alive()
 
     # Process
     def create_process(self, target=None, daemon=False, **kwargs):
@@ -1333,12 +1336,6 @@ class ProcessingUnit(object):
 
         if init:
             self.construct(name=name, task=task, daemon=daemon, **kwargs)
-
-    @property
-    def is_processing(self):
-        if self.process is not None and self.separate_process:
-            self._is_processing = self.process.is_alive
-        return self._is_processing
 
     @property
     def task_object(self):
@@ -1425,6 +1422,11 @@ class ProcessingUnit(object):
             return True
         else:
             return False
+
+    def is_processing(self):
+        if self.process is not None and self.separate_process:
+            self._is_processing = self.process.is_alive()
+        return self._is_processing
 
     # Process
     def new_process(self, name=None, daemon=False, kwargs={}):
