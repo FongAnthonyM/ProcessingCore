@@ -756,10 +756,13 @@ class OutputsHandler(object):
 
 class Task(object):
     # Construction/Destruction
-    def __init__(self, name=None, allow_setup=True, allow_closure=True, init=True, kwargs={}):
+    def __init__(self, name=None, allow_setup=True, allow_closure=True,
+                 s_kwargs={}, t_kwargs={}, c_kwargs={}, init=True):
         self.name = name
         self.async_loop = asyncio.get_event_loop()
-        self.kwargs = kwargs
+        self.setup_kwargs = s_kwargs
+        self.task_kwargs = t_kwargs
+        self.closure_kwargs = c_kwargs
         self.allow_setup = allow_setup
         self.allow_closure = allow_closure
         self.stop_event = Event()
@@ -832,7 +835,7 @@ class Task(object):
         pass
 
     # Task
-    def task(self, name=None):
+    def task(self):
         pass
 
     def task_loop(self, **kwargs):
@@ -854,90 +857,111 @@ class Task(object):
         pass
 
     # Normal Execute Methods
-    def run_normal(self, **kwargs):
+    def run_normal(self, s_kwargs={}, t_kwargs={}, c_kwargs={}):
         # Optionally run Setup
         if self.allow_setup:
-            self._execute_setup()
+            if s_kwargs:
+                self.setup_kwargs = s_kwargs
+            self._execute_setup(**self.setup_kwargs)
 
         # Run Task
-        if kwargs:
-            self.kwargs = kwargs
-        self._execute_task(**self.kwargs)
+        if t_kwargs:
+            self.task_kwargs = t_kwargs
+        self._execute_task(**self.task_kwargs)
 
         # Optionally run Closure
         if self.allow_closure:
-            self._execute_closure()
+            if c_kwargs:
+                self.closure_kwargs = c_kwargs
+            self._execute_closure(**self.closure_kwargs)
 
-    def start_normal(self, **kwargs):
+    def start_normal(self, s_kwargs={}, t_kwargs={}, c_kwargs={}):
+        # Prep
         self.prepare_task_loop()
 
         # Optionally run Setup
         if self.allow_setup:
-            self._execute_setup()
+            if s_kwargs:
+                self.setup_kwargs = s_kwargs
+            self._execute_setup(**self.setup_kwargs)
 
         # Run Task Loop
-        if kwargs:
-            self.kwargs = kwargs
-        self._execute_task_loop(**kwargs)
+        if t_kwargs:
+            self.task_kwargs = t_kwargs
+        self._execute_task_loop(**self.task_kwargs)
 
         # Optionally run Closure
         if self.allow_closure:
-            self._execute_closure()
+            if c_kwargs:
+                self.closure_kwargs = c_kwargs
+            self._execute_closure(**self.closure_kwargs)
 
     # Async Execute Methods
-    async def run_coro(self, **kwargs):
+    async def run_coro(self, s_kwargs={}, t_kwargs={}, c_kwargs={}):
         # Optionally run Setup
         if self.allow_setup:
+            if s_kwargs:
+                self.setup_kwargs = s_kwargs
             if asyncio.iscoroutinefunction(self._execute_setup):
-                await self._execute_setup()
+                await self._execute_setup(**self.setup_kwargs)
             else:
-                self._execute_setup()
+                self._execute_setup(**self.setup_kwargs)
 
         # Run Task
-        if kwargs:
-            self.kwargs = kwargs
+        if t_kwargs:
+            self.task_kwargs = t_kwargs
         if asyncio.iscoroutinefunction(self._execute_task):
-            await self._execute_task(**kwargs)
+            await self._execute_task(**self.task_kwargs)
         else:
-            self._execute_task(**kwargs)
+            self._execute_task(**self.task_kwargs)
 
         # Optionally run Closure
         if self.allow_closure:
+            if c_kwargs:
+                self.closure_kwargs = c_kwargs
             if asyncio.iscoroutinefunction(self._execute_closure):
-                await self._execute_closure()
+                await self._execute_closure(**self.closure_kwargs)
             else:
-                self._execute_closure()
+                self._execute_closure(**self.closure_kwargs)
 
-    async def start_coro(self, **kwargs):
+    async def start_coro(self, s_kwargs={}, t_kwargs={}, c_kwargs={}):
         self.prepare_task_loop()
 
         # Optionally run Setup
         if self.allow_setup:
+            if s_kwargs:
+                self.setup_kwargs = s_kwargs
             if asyncio.iscoroutinefunction(self._execute_setup):
-                await self._execute_setup()
+                await self._execute_setup(**self.setup_kwargs)
             else:
-                self._execute_setup()
+                self._execute_setup(**self.setup_kwargs)
 
         # Run Task
-        if kwargs:
-            self.kwargs = kwargs
+        if t_kwargs:
+            self.task_kwargs = t_kwargs
         if asyncio.iscoroutinefunction(self._execute_task):
-            await self._execute_task_loop(**kwargs)
+            await self._execute_task_loop(**self.task_kwargs)
         else:
-            self._execute_task_loop(**kwargs)
+            self._execute_task_loop(**self.task_kwargs)
 
         # Optionally run Closure
         if self.allow_closure:
+            if c_kwargs:
+                self.closure_kwargs = c_kwargs
             if asyncio.iscoroutinefunction(self._execute_closure):
-                await self._execute_closure()
+                await self._execute_closure(**self.closure_kwargs)
             else:
-                self._execute_closure()
+                self._execute_closure(**self.closure_kwargs)
 
     # Set Execution Methods
-    def set_setup(self, func):
+    def set_setup(self, func, kwargs={}):
+        if kwargs:
+            self.setup_kwargs = kwargs
         self._execute_setup = func
 
-    def set_task(self, func):
+    def set_task(self, func, kwargs={}):
+        if kwargs:
+            self.task_kwargs = kwargs
         self._execute_task = func
 
     def set_task_loop(self, func):
@@ -951,27 +975,29 @@ class Task(object):
             if not asyncio.iscoroutinefunction(self._execute_task):
                 self._execute_task_loop = self.task_loop
 
-    def set_closure(self, func):
+    def set_closure(self, func, kwargs={}):
+        if kwargs:
+            self.closure_kwargs = kwargs
         self._execute_closure = func
 
     # Execution
-    def run(self, **kwargs):
+    def run(self, s_kwargs={}, t_kwargs={}, c_kwargs={}):
         if self.is_async():
-            asyncio.run(self.run_coro(**kwargs))
+            asyncio.run(self.run_coro(s_kwargs, t_kwargs, c_kwargs))
         else:
-            self.run_normal(**kwargs)
+            self.run_normal(s_kwargs, t_kwargs, c_kwargs)
 
-    def run_async_task(self, **kwargs):
-        return asyncio.create_task(self.run_coro(**kwargs))
+    def run_async_task(self, s_kwargs={}, t_kwargs={}, c_kwargs={}):
+        return asyncio.create_task(self.run_coro(s_kwargs, t_kwargs, c_kwargs))
 
-    def start(self, **kwargs):
+    def start(self, s_kwargs={}, t_kwargs={}, c_kwargs={}):
         if self.is_async():
-            asyncio.run(self.start_coro(**kwargs))
+            asyncio.run(self.start_coro(s_kwargs, t_kwargs, c_kwargs))
         else:
-            self.start_normal(**kwargs)
+            self.start_normal(s_kwargs, t_kwargs, c_kwargs)
 
-    def start_async_task(self, **kwargs):
-        return asyncio.create_task(self.start_coro(**kwargs))
+    def start_async_task(self, s_kwargs={}, t_kwargs={}, c_kwargs={}):
+        return asyncio.create_task(self.start_coro(s_kwargs, t_kwargs, c_kwargs))
 
     def stop(self):
         self.stop_event.set()
@@ -986,8 +1012,12 @@ class MultiUnitTask(Task):
     SETTING_NAMES = {"unit", "start", "setup", "closure", "kwargs"}
 
     # Construction/Destruction
-    def __init__(self, name=None, units={}, order=(), allow_setup=True, allow_closure=True, init=True, kwargs={}):
-        super().__init__(name, allow_setup, allow_closure, init=False, kwargs=kwargs)
+    def __init__(self, name=None, units={}, order=(),
+                 allow_setup=True, allow_closure=True, s_kwargs={}, t_kwargs={}, c_kwargs={}, init=True):
+        super().__init__(name, allow_setup, allow_closure, s_kwargs, t_kwargs, c_kwargs, init=False)
+
+        self.unit_inputs = {}
+        self.unit_outputs = {}
 
         self._execution_order = ()
         self.units = {}
@@ -1025,6 +1055,8 @@ class MultiUnitTask(Task):
         return self.units.items()
 
     def append(self, name, unit, start=True, setup=False, closure=False, kwargs={}):
+        self.unit_inputs[name] = unit.inputs
+        self.unit_outputs[name] = unit.outputs
         self.units[name] = {"unit": unit, "start": start, "setup": setup, "closure": closure, "kwargs": kwargs}
 
     def extend(self, units):
@@ -1035,9 +1067,13 @@ class MultiUnitTask(Task):
             self.units[name] = unit
 
     def pop(self, name):
+        del self.unit_inputs[name]
+        del self.unit_outputs[name]
         return self.units.pop(name)
 
     def clear(self):
+        self.unit_inputs.clear()
+        self.unit_outputs.clear()
         self.units.clear()
 
     def all_async(self):
@@ -1067,7 +1103,7 @@ class MultiUnitTask(Task):
                 unit["unit"].allow_closure = False
 
     # Task
-    def task(self, name=None):
+    def task(self):
         if not self.execution_order:
             names = self.units
         else:
@@ -1082,7 +1118,7 @@ class MultiUnitTask(Task):
             else:
                 unit.run(**kwargs)
 
-    async def task_async(self, name=None):
+    async def task_async(self):
         tasks = []
         if not self.execution_order:
             names = self.units
@@ -1127,21 +1163,21 @@ class MultiUnitTask(Task):
                 self._execute_task = self.task
 
     # Execution
-    def run(self, **kwargs):
+    def run(self, s_kwargs={}, t_kwargs={}, c_kwargs={}):
         self.prepare_task()
-        super().run(**kwargs)
+        super().run(s_kwargs, t_kwargs, c_kwargs)
 
-    def run_async_task(self, **kwargs):
+    def run_async_task(self, s_kwargs={}, t_kwargs={}, c_kwargs={}):
         self.prepare_task()
-        return super().run_async_task(**kwargs)
+        return super().run_async_task(s_kwargs, t_kwargs, c_kwargs)
 
-    def start(self, **kwargs):
+    def start(self, s_kwargs={}, t_kwargs={}, c_kwargs={}):
         self.prepare_task()
-        super().start(**kwargs)
+        super().start(s_kwargs, t_kwargs, c_kwargs)
 
-    def start_async_task(self, **kwargs):
+    def start_async_task(self, s_kwargs={}, t_kwargs={}, c_kwargs={}):
         self.prepare_task()
-        return super().start_async_task(**kwargs)
+        return super().start_async_task(s_kwargs, t_kwargs, c_kwargs)
 
     def stop(self, join=True, timeout=None):
         super().stop()
@@ -1317,12 +1353,15 @@ class ProcessingUnit(object):
     DEFAULT_TASK = Task
 
     # Construction/Destruction
-    def __init__(self, name=None, task=None, allow_setup=True, allow_closure=True, separate_process=False, init=True,
-                 daemon=False, **kwargs):
+    def __init__(self, name=None, task=None, to_kwargs={},
+                 separate_process=False, daemon=False, p_kwargs={},
+                 allow_setup=False, allow_closure=False, init=True):
         self.name = name
+        self.unit_setup_kwargs = {}
+        self.unit_closure_kwargs = {}
         self.allow_setup = allow_setup
         self.allow_closure = allow_closure
-        self.await_closure = True
+        self.await_closure = False
 
         self.separate_process = separate_process
         self._is_processing = False
@@ -1335,7 +1374,7 @@ class ProcessingUnit(object):
         self._joined = True
 
         if init:
-            self.construct(name=name, task=task, daemon=daemon, **kwargs)
+            self.construct(name=name, task=task, to_kwargs=to_kwargs, daemon=daemon, p_kwargs=p_kwargs)
 
     @property
     def task_object(self):
@@ -1406,12 +1445,12 @@ class ProcessingUnit(object):
             raise NameError
 
     # Constructors
-    def construct(self, name=None, task=None, daemon=False, **kwargs):
+    def construct(self, name=None, task=None, to_kwargs={}, daemon=False, p_kwargs={}):
         if self.separate_process:
-            self.new_process(name=name, daemon=daemon, **kwargs)
+            self.new_process(name=name, daemon=daemon, kwargs=p_kwargs)
         if task is None:
             if self.task_object is None:
-                self.default_task_object()
+                self.default_task_object(**to_kwargs)
         else:
             self.task_object = task
 
@@ -1438,24 +1477,25 @@ class ProcessingUnit(object):
     def set_process(self, process):
         self.process = process
 
+    # Set Task Object
+    def default_task_object(self, **kwargs):
+        self.task_object = self.DEFAULT_TASK(name=self.name, **kwargs)
+
     # Setup
     def setup(self):
         pass
-
-    # Task
-    def default_task_object(self):
-        self.task_object = self.DEFAULT_TASK(name=self.name)
 
     # Closure
     def closure(self):
         pass
 
     # Normal Execution Methods
-    def run_normal(self, **kwargs):
+    def run_normal(self, s_kwargs={}, t_kwargs={}, c_kwargs={}):
         self._joined = False
+        kwargs = {"s_kwargs": s_kwargs, "t_kwargs": t_kwargs, "c_kwargs": c_kwargs}
         # Optionally run Setup
         if self.allow_setup:
-            self._execute_setup()
+            self._execute_setup(**self.unit_setup_kwargs)
 
         # Run Task
         if self.separate_process:
@@ -1471,14 +1511,15 @@ class ProcessingUnit(object):
                     self.process.join()
                 else:
                     warnings.warn()
-            self._execute_closure()
+            self._execute_closure(**self.unit_closure_kwargs)
         self._joined = True
 
-    def start_normal(self, **kwargs):
+    def start_normal(self, s_kwargs={}, t_kwargs={}, c_kwargs={}):
         self._joined = False
+        kwargs = {"s_kwargs": s_kwargs, "t_kwargs": t_kwargs, "c_kwargs": c_kwargs}
         # Optionally run Setup
         if self.allow_setup:
-            self._execute_setup()
+            self._execute_setup(**self.unit_setup_kwargs)
 
         # Run Task
         if self.separate_process:
@@ -1494,18 +1535,19 @@ class ProcessingUnit(object):
                     self.process.join()
                 else:
                     warnings.warn()
-            self._execute_closure()
+            self._execute_closure(**self.unit_closure_kwargs)
         self._joined = True
 
     # Async Execute Methods
-    async def run_coro(self, **kwargs):
+    async def run_coro(self, s_kwargs={}, t_kwargs={}, c_kwargs={}):
         self._joined = False
+        kwargs = {"s_kwargs": s_kwargs, "t_kwargs": t_kwargs, "c_kwargs": c_kwargs}
         # Optionally run Setup
         if self.allow_setup:
             if asyncio.iscoroutinefunction(self._execute_setup):
-                await self._execute_setup()
+                await self._execute_setup(**self.unit_setup_kwargs)
             else:
-                self._execute_setup()
+                self._execute_setup(**self.unit_setup_kwargs)
 
         # Run Task
         if self.separate_process:
@@ -1525,19 +1567,20 @@ class ProcessingUnit(object):
                     else:
                         warnings.warn()
                 if asyncio.iscoroutinefunction(self._execute_closure):
-                    await self._execute_closure()
+                    await self._execute_closure(**self.unit_closure_kwargs)
                 else:
-                    self._execute_closure()
+                    self._execute_closure(**self.unit_closure_kwargs)
         self._joined = True
 
-    async def start_coro(self, **kwargs):
+    async def start_coro(self, s_kwargs={}, t_kwargs={}, c_kwargs={}):
         self._joined = False
+        kwargs = {"s_kwargs": s_kwargs, "t_kwargs": t_kwargs, "c_kwargs": c_kwargs}
         # Optionally run Setup
         if self.allow_setup:
             if asyncio.iscoroutinefunction(self._execute_setup):
-                await self._execute_setup()
+                await self._execute_setup(**self.unit_setup_kwargs)
             else:
-                self._execute_setup()
+                self._execute_setup(**self.unit_setup_kwargs)
 
         # Run Task
         if self.separate_process:
@@ -1557,38 +1600,48 @@ class ProcessingUnit(object):
                 else:
                     warnings.warn()
             if asyncio.iscoroutinefunction(self._execute_closure):
-                await self._execute_closure()
+                await self._execute_closure(**self.unit_closure_kwargs)
             else:
-                self._execute_closure()
+                self._execute_closure(**self.unit_closure_kwargs)
         self._joined = True
 
     # Set Execution Methods
+    def set_setup(self, func, kwargs={}):
+        if kwargs:
+            self.unit_setup_kwargs = kwargs
+        self._execute_setup = func
+
     def use_task_setup(self):
         self.task_object.allow_setup = False
         self._execute_setup = self.task_object.setup
+
+    def set_closure(self, func, kwargs={}):
+        if kwargs:
+            self.unit_closure_kwargs = kwargs
+        self._execute_closure = func
 
     def use_task_closure(self):
         self.task_object.allow_closure = False
         self._execute_closure = self.task_object.closure
 
     # Execution
-    def run(self, **kwargs):
+    def run(self, s_kwargs={}, t_kwargs={}, c_kwargs={}):
         if self.is_async():
-            asyncio.run(self.run_coro(**kwargs))
+            asyncio.run(self.run_coro(s_kwargs, t_kwargs, c_kwargs))
         else:
-            self.run_normal(**kwargs)
+            self.run_normal(s_kwargs, t_kwargs, c_kwargs)
 
-    def run_async_task(self, **kwargs):
-        return asyncio.create_task(self.run_coro(**kwargs))
+    def run_async_task(self, s_kwargs={}, t_kwargs={}, c_kwargs={}):
+        return asyncio.create_task(self.run_coro(s_kwargs, t_kwargs, c_kwargs))
 
-    def start(self, **kwargs):
+    def start(self, s_kwargs={}, t_kwargs={}, c_kwargs={}):
         if self.is_async():
-            asyncio.run(self.start_coro(**kwargs))
+            asyncio.run(self.start_coro(s_kwargs, t_kwargs, c_kwargs))
         else:
-            self.start_normal(**kwargs)
+            self.start_normal(s_kwargs, t_kwargs, c_kwargs)
 
-    def start_async_task(self, **kwargs):
-        return asyncio.create_task(self.start_coro(**kwargs))
+    def start_async_task(self, s_kwargs={}, t_kwargs={}, c_kwargs={}):
+        return asyncio.create_task(self.start_coro(s_kwargs, t_kwargs, c_kwargs))
 
     def join(self, timeout=None):
         start_time = time.perf_counter()
