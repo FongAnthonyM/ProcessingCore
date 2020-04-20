@@ -1232,7 +1232,7 @@ class MultiUnitTask(Task):
 
 
 class SeparateProcess(object):
-    available_cpus = multiprocessing.cpu_count()
+    CPU_COUNT = multiprocessing.cpu_count()
 
     # Construction/Destruction
     def __init__(self, target=None, name=None, daemon=False, init=False, kwargs={}):
@@ -1677,7 +1677,8 @@ class ProcessingUnit(object):
             if timeout is not None and (time.perf_counter() - start_time) >= timeout:
                 return None
 
-        timeout = timeout - (time.perf_counter() - start_time)
+        if timeout is not None:
+            timeout = timeout - (time.perf_counter() - start_time)
 
         if self.separate_process:
             self.process.join(timeout=timeout)
@@ -1690,7 +1691,8 @@ class ProcessingUnit(object):
             if timeout is not None and (time.perf_counter() - start_time) >= timeout:
                 return None
 
-        timeout = timeout - (time.perf_counter() - start_time)
+        if timeout is not None:
+            timeout = timeout - (time.perf_counter() - start_time)
 
         if self.separate_process:
             await self.process.join_async(timeout=timeout, interval=interval)
