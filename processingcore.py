@@ -1215,10 +1215,10 @@ class MultiUnitTask(Task):
             names = self.execution_order
 
         for name in names:
-            self.units[name]["unit"].stop(join=False)
+            self.units[name].stop(join=False)
 
         for name in names:
-            self.units[name]["unit"].join(timeout=timeout)
+            self.units[name].join(timeout=timeout)
 
     def reset(self):
         super().reset()
@@ -1228,7 +1228,7 @@ class MultiUnitTask(Task):
             names = self.execution_order
 
         for name in names:
-            self.units[name]["unit"].reset()
+            self.units[name].reset()
 
 
 class SeparateProcess(object):
