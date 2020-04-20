@@ -1720,7 +1720,7 @@ class ProcessingCluster(ProcessingUnit):
     # Construction/Destruction
     def __init__(self, name=None, task=None, to_kwargs={},
                  separate_process=False, daemon=False, p_kwargs={},
-                 allow_setup=True, allow_closure=True, init=True):
+                 allow_setup=False, allow_closure=False, init=True):
         # Run Parent __init__ but only construct in child
         super().__init__(name=name, task=task, to_kwargs=to_kwargs,
                          separate_process=separate_process, daemon=daemon, p_kwargs=p_kwargs,
