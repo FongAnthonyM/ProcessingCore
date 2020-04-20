@@ -1697,12 +1697,12 @@ class ProcessingUnit(object):
         return None
 
     def stop(self, join=True, timeout=None):
-        self.task_object.stop()
+        self._task_object.stop()
         if join:
             self.join(timeout=timeout)
 
     async def stop_async(self, join=True, timeout=None, interval=0.0):
-        self.task_object.stop()
+        self._task_object.stop()
         if join:
             await self.join_async(timeout=timeout, interval=interval)
 
@@ -1779,7 +1779,7 @@ class ProcessingCluster(ProcessingUnit):
 
     # Execution
     def stop(self, join=True, timeout=None):
-        self.task_object.stop(join=join, timeout=timeout)
+        self._task_object.stop(join=join, timeout=timeout)
         if join:
             self.join(timeout=timeout)
 
