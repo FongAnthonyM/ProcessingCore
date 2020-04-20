@@ -1068,7 +1068,7 @@ class MultiUnitTask(Task):
     def items(self):
         return self.units.items()
 
-    def set(self, name, unit, start=True, setup=False, closure=False, s_kwargs={}, t_kwargs={}, c_kwargs={}):
+    def set_unit(self, name, unit, start=True, setup=False, closure=False, s_kwargs={}, t_kwargs={}, c_kwargs={}):
         self.units[name] = unit
         self.execution_kwargs[name] = {"start": start, "setup": setup, "closure": closure,
                                        "s_kwargs": s_kwargs, "t_kwargs": t_kwargs, "c_kwargs": c_kwargs}
@@ -1078,14 +1078,14 @@ class MultiUnitTask(Task):
             if set(execution_kwargs).issubset(units):
                 for name, unit in units.items():
                     if set(execution_kwargs[name]).issubset(self.SETTING_NAMES):
-                        self.append(name, unit, **execution_kwargs[name])
+                        self.set_unit(name, unit, **execution_kwargs[name])
                     else:
                         warnings.warn()
                 else:
                     warnings.warn()
         else:
             for name, unit in units.items():
-                self.append(name, unit)
+                self.set_unit(name, unit)
 
     def pop(self, name):
         del self.execution_kwargs[name]
@@ -1765,8 +1765,8 @@ class ProcessingCluster(ProcessingUnit):
     def items(self):
         return self.task_object.items()
 
-    def set(self, name, unit, start=True, setup=False, closure=False, s_kwargs={}, t_kwargs={}, c_kwargs={}):
-        self.task_object.append(name, unit, start, setup, closure, s_kwargs, t_kwargs, c_kwargs)
+    def set_unit(self, name, unit, start=True, setup=False, closure=False, s_kwargs={}, t_kwargs={}, c_kwargs={}):
+        self.task_object.set_unit(name, unit, start, setup, closure, s_kwargs, t_kwargs, c_kwargs)
 
     def extend(self, units):
         self.task_object.extend(units=units)
