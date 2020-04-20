@@ -1785,7 +1785,7 @@ class ProcessingCluster(ProcessingUnit):
 
 
 # Functions #
-def run_method(obj, method, kwargs={}):
+def run_method(obj, method, **kwargs):
     return getattr(obj, method)(**kwargs)
 
 
