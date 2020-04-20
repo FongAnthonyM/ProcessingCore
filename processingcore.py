@@ -1009,21 +1009,24 @@ class Task(object):
 
 
 class MultiUnitTask(Task):
-    SETTING_NAMES = {"unit", "start", "setup", "closure", "kwargs"}
+    SETTING_NAMES = {"unit", "start", "setup", "closure", "s_kwargs", "t_kwargs", "c_kwargs"}
 
     # Construction/Destruction
-    def __init__(self, name=None, units={}, order=(),
+    def __init__(self, name=None, units={}, execution_kwargs={}, order=(),
                  allow_setup=True, allow_closure=True, s_kwargs={}, t_kwargs={}, c_kwargs={}, init=True):
-        super().__init__(name, allow_setup, allow_closure, s_kwargs, t_kwargs, c_kwargs, init=False)
+        # Run Parent __init__ but only construct in child
+        super().__init__(name=name, allow_setup=allow_setup, allow_closure=allow_closure,
+                         s_kwargs=s_kwargs, t_kwargs=t_kwargs, c_kwargs=c_kwargs, init=False)
 
-        self.unit_inputs = {}
-        self.unit_outputs = {}
-
+        # Attributes
         self._execution_order = ()
-        self.units = {}
 
+        self.units = {}
+        self.execution_kwargs = {}
+
+        # Optionally Construct this object
         if init:
-            self.construct(units=units, order=order)
+            self.construct(units=units, execution_kwargs=execution_kwargs, order=order)
 
     @property
     def execution_order(self):
@@ -1036,11 +1039,22 @@ class MultiUnitTask(Task):
         else:
             warnings.warn()
 
+    # Container Methods
+    def __len__(self):
+        return len(self.units)
+
+    def __getitem__(self, item):
+        return self.units[item]
+
+    def __delitem__(self, key):
+        del self.execution_kwargs[key]
+        del self.units[key]
+
     # Constructors/Destructors
-    def construct(self, units={}, order=()):
+    def construct(self, units={}, execution_kwargs={}, order=()):
         super().construct()
         if units:
-            self.extend(units=units)
+            self.extend(units=units, execution_kwargs=execution_kwargs)
         if order:
             self.execution_order = order
 
@@ -1054,37 +1068,42 @@ class MultiUnitTask(Task):
     def items(self):
         return self.units.items()
 
-    def append(self, name, unit, start=True, setup=False, closure=False, kwargs={}):
-        self.unit_inputs[name] = unit.inputs
-        self.unit_outputs[name] = unit.outputs
-        self.units[name] = {"unit": unit, "start": start, "setup": setup, "closure": closure, "kwargs": kwargs}
+    def set(self, name, unit, start=True, setup=False, closure=False, s_kwargs={}, t_kwargs={}, c_kwargs={}):
+        self.units[name] = unit
+        self.execution_kwargs[name] = {"start": start, "setup": setup, "closure": closure,
+                                       "s_kwargs": s_kwargs, "t_kwargs": t_kwargs, "c_kwargs": c_kwargs}
 
-    def extend(self, units):
-        for name, unit in units.items():
-            for setting in self.SETTING_NAMES:
-                if setting not in unit:
+    def extend(self, units, execution_kwargs={}):
+        if execution_kwargs:
+            if set(execution_kwargs).issubset(units):
+                for name, unit in units.items():
+                    if set(execution_kwargs[name]).issubset(self.SETTING_NAMES):
+                        self.append(name, unit, **execution_kwargs[name])
+                    else:
+                        warnings.warn()
+                else:
                     warnings.warn()
-            self.units[name] = unit
+        else:
+            for name, unit in units.items():
+                self.append(name, unit)
 
     def pop(self, name):
-        del self.unit_inputs[name]
-        del self.unit_outputs[name]
+        del self.execution_kwargs[name]
         return self.units.pop(name)
 
     def clear(self):
-        self.unit_inputs.clear()
-        self.unit_outputs.clear()
+        self.execution_kwargs.clear()
         self.units.clear()
 
     def all_async(self):
         for unit in self.units.values():
-            if not unit["unit"].is_async():
+            if not unit.is_async():
                 return False
         return True
 
     def any_async(self):
         for unit in self.units.values():
-            if unit["unit"].is_async():
+            if unit.is_async():
                 return True
         return False
 
@@ -1094,13 +1113,15 @@ class MultiUnitTask(Task):
             names = self.units
         else:
             names = self.execution_order
+
         for name in names:
             unit = self.units[name]
-            if unit["setup"]:
-                unit["unit"].allow_setup = False
-                unit["unit"].setup()
-            if unit["closure"]:
-                unit["unit"].allow_closure = False
+            execution_kwargs = self.execution_kwargs[name]
+            if execution_kwargs["setup"]:
+                unit.allow_setup = False
+                unit.setup(**execution_kwargs["c_kwargs"])
+            if execution_kwargs["closure"]:
+                unit.allow_closure = False
 
     # Task
     def task(self):
@@ -1110,13 +1131,15 @@ class MultiUnitTask(Task):
             names = self.execution_order
 
         for name in names:
-            unit = self.units[name]["unit"]
-            kwargs = self.units[name]["kwargs"]
-            start = self.units[name]["start"]
+            unit = self.units[name]
+            start = self.execution_kwargs[name]["start"]
+            s_kwargs = self.execution_kwargs[name]["s_kwargs"]
+            t_kwargs = self.execution_kwargs[name]["t_kwargs"]
+            c_kwargs = self.execution_kwargs[name]["c_kwargs"]
             if start:
-                unit.start(**kwargs)
+                unit.start(s_kwargs, t_kwargs, c_kwargs)
             else:
-                unit.run(**kwargs)
+                unit.run(s_kwargs, t_kwargs, c_kwargs)
 
     async def task_async(self):
         tasks = []
@@ -1126,19 +1149,22 @@ class MultiUnitTask(Task):
             names = self.execution_order
 
         for name in names:
-            unit = self.units[name]["unit"]
-            kwargs = self.units[name]["kwargs"]
-            start = self.units[name]["start"]
+            unit = self.units[name]
+            start = self.execution_kwargs[name]["start"]
+            s_kwargs = self.execution_kwargs[name]["s_kwargs"]
+            t_kwargs = self.execution_kwargs[name]["t_kwargs"]
+            c_kwargs = self.execution_kwargs[name]["c_kwargs"]
             if start:
                 if unit.is_async():
-                    tasks.append(unit.start_async_task(**kwargs))
+                    tasks.append(unit.start_async_task(s_kwargs, t_kwargs, c_kwargs))
                 else:
-                    unit.start(**kwargs)
+                    unit.start(s_kwargs, t_kwargs, c_kwargs)
             else:
                 if unit.is_async():
-                    tasks.append(unit.run_async_task(**kwargs))
+                    tasks.append(unit.run_async_task(s_kwargs, t_kwargs, c_kwargs))
                 else:
-                    unit.run(**kwargs)
+                    unit.run(s_kwargs, t_kwargs, c_kwargs)
+
         for task in tasks:
             await task
 
@@ -1148,10 +1174,12 @@ class MultiUnitTask(Task):
             names = self.units
         else:
             names = self.execution_order
+
         for name in names:
             unit = self.units[name]
-            if unit["closure"]:
-                unit["unit"].closure()
+            execution_kwargs = self.execution_kwargs[name]
+            if execution_kwargs["closure"]:
+                unit.closure(**execution_kwargs["c_kwargs"])
 
     # Set Execution Methods
     def prepare_task(self):
@@ -1689,9 +1717,14 @@ class ProcessingUnit(object):
 class ProcessingCluster(ProcessingUnit):
     DEFAULT_TASK = MultiUnitTask
 
-    def __init__(self, name=None, task=None, allow_setup=True, allow_closure=True, separate_process=False, init=True,
-                 daemon=False, **kwargs):
-        super().__init__(name, task, allow_setup, allow_closure, separate_process, init=False, daemon=daemon, **kwargs)
+    # Construction/Destruction
+    def __init__(self, name=None, task=None, to_kwargs={},
+                 separate_process=False, daemon=False, p_kwargs={},
+                 allow_setup=True, allow_closure=True, init=True):
+        # Run Parent __init__ but only construct in child
+        super().__init__(name=name, task=task, to_kwargs=to_kwargs,
+                         separate_process=separate_process, daemon=daemon, p_kwargs=p_kwargs,
+                         allow_setup=allow_setup, allow_closure=allow_closure, init=False)
 
         if init:
             self.construct(name)
@@ -1712,6 +1745,17 @@ class ProcessingCluster(ProcessingUnit):
     def units(self, value):
         self.task_object.units = value
 
+    # Container Magic Methods
+    def __len__(self):
+        return len(self.task_object)
+
+    def __getitem__(self, item):
+        return self.task_object[item]
+
+    def __delitem__(self, key):
+        del self.task_object[key]
+
+    # Container Methods
     def keys(self):
         return self.task_object.keys()
 
@@ -1721,8 +1765,8 @@ class ProcessingCluster(ProcessingUnit):
     def items(self):
         return self.task_object.items()
 
-    def append(self, name, unit, start=True, setup=False, closure=False, kwargs={}):
-        self.task_object.append(name, unit, start, setup, closure, kwargs)
+    def set(self, name, unit, start=True, setup=False, closure=False, s_kwargs={}, t_kwargs={}, c_kwargs={}):
+        self.task_object.append(name, unit, start, setup, closure, s_kwargs, t_kwargs, c_kwargs)
 
     def extend(self, units):
         self.task_object.extend(units=units)
@@ -1733,12 +1777,14 @@ class ProcessingCluster(ProcessingUnit):
     def clear(self):
         self.task_object.clear()
 
+    # Execution
     def stop(self, join=True, timeout=None):
         self.task_object.stop(join=join, timeout=timeout)
         if join:
             self.join(timeout=timeout)
 
 
+# Functions #
 def run_method(obj, method, kwargs={}):
     return getattr(obj, method)(**kwargs)
 
