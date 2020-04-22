@@ -63,6 +63,9 @@ class ObjectInheritor(abc.ABC):
         # If the item is an attribute in self or not in any indirect parent set as attribute
         return super().__setattr__(name, value)
 
+    def _setattr(self, name, value):
+        super().__setattr__(name, value)
+
 
 class AdvanceLogger(ObjectInheritor):
     _indirect_parents = ["_logger"]
