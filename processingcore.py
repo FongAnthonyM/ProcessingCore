@@ -1470,62 +1470,6 @@ class ProcessingUnit(ObjectInheritor):
             warnings.warn()
         self._task_object = value
 
-    @property
-    def events(self):
-        if self.task_object is not None:
-            return self.task_object.events
-        else:
-            return None
-
-    @events.setter
-    def events(self, value):
-        if self.task_object is not None:
-            self.task_object.events = value
-        else:
-            raise NameError
-
-    @property
-    def locks(self):
-        if self.task_object is not None:
-            return self.task_object.locks
-        else:
-            return None
-
-    @locks.setter
-    def locks(self, value):
-        if self.task_object is not None:
-            self.task_object.locks = value
-        else:
-            raise NameError
-
-    @property
-    def inputs(self):
-        if self.task_object is not None:
-            return self.task_object.inputs
-        else:
-            return None
-
-    @inputs.setter
-    def inputs(self, value):
-        if self.task_object is not None:
-            self.task_object.inputs = value
-        else:
-            raise NameError
-
-    @property
-    def outputs(self):
-        if self.task_object is not None:
-            return self.task_object.outputs
-        else:
-            return None
-
-    @outputs.setter
-    def outputs(self, value):
-        if self.task_object is not None:
-            self.task_object.outputs = value
-        else:
-            raise NameError
-
     # Constructors
     def construct(self, name=None, task=None, to_kwargs={}, daemon=False, p_kwargs={}):
         if self.separate_process:
@@ -1793,14 +1737,6 @@ class ProcessingCluster(ProcessingUnit):
     def execution_order(self, value):
         self.task_object.execution_order = value
 
-    @property
-    def units(self):
-        return self.task_object.units
-
-    @units.setter
-    def units(self, value):
-        self.task_object.units = value
-
     # Container Magic Methods
     def __len__(self):
         return len(self.task_object)
@@ -1810,28 +1746,6 @@ class ProcessingCluster(ProcessingUnit):
 
     def __delitem__(self, key):
         del self.task_object[key]
-
-    # Container Methods
-    def keys(self):
-        return self.task_object.keys()
-
-    def values(self):
-        return self.task_object.values()
-
-    def items(self):
-        return self.task_object.items()
-
-    def set_unit(self, name, unit, start=True, setup=False, closure=False, s_kwargs={}, t_kwargs={}, c_kwargs={}):
-        self.task_object.set_unit(name, unit, start, setup, closure, s_kwargs, t_kwargs, c_kwargs)
-
-    def extend(self, units):
-        self.task_object.extend(units=units)
-
-    def pop(self, name):
-        return self.task_object.pop(name)
-
-    def clear(self):
-        self.task_object.clear()
 
     # Execution
     def stop(self, join=True, timeout=None):
