@@ -1284,7 +1284,8 @@ class MultiUnitTask(Task):
             self.units[name].reset()
 
 
-class SeparateProcess(object):
+class SeparateProcess(ObjectInheritor):
+    _attributes_as_parents = ["_process"]
     CPU_COUNT = multiprocessing.cpu_count()
 
     # Construction/Destruction
@@ -1396,15 +1397,6 @@ class SeparateProcess(object):
         self.process = Process(target=self.method_wrapper, name=self.name, daemon=self.daemon, kwargs=self.target_kwargs)
 
     # Execution
-    def run(self):
-        self.process.run()
-
-    def start(self):
-        self.process.start()
-
-    def join(self, timeout=None):
-        return self.process.join(timeout=timeout)
-
     async def join_async(self, timeout=None, interval=0.0):
         start_time = time.perf_counter()
         while self.process.join(0) is None:
@@ -1419,9 +1411,6 @@ class SeparateProcess(object):
             self.process = Process(target=self.target, name=self.name, daemon=self.daemon, kwargs=self.target_kwargs)
         else:
             pass
-
-    def terminate(self):
-        self.process.terminate()
 
     def close(self):
         if isinstance(self.process, Process):
