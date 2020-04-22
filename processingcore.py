@@ -13,7 +13,9 @@ __email__ = ""
 __status__ = "Prototype"
 
 # Default Libraries #
+import abc
 import asyncio
+import logging
 import multiprocessing
 from multiprocessing import Process, Pool, Lock, Event, Queue, Pipe
 import queue
@@ -27,7 +29,55 @@ import time
 
 
 # Definitions #
+# Logger #
+# Child logging.getLogger("myapp.ui")
+
 # Classes #
+class ObjectInheritor(abc.ABC):
+    _attributes_as_parents = []
+
+    # Attribute Access
+    def __getattribute__(self, name):
+        # Check if item is in self and if not check in the object parents
+        if name not in {"__dict__", "__class__", "_attributes_as_parents"} and \
+           name not in self._attributes_as_parents and name not in dir(self):
+            # Iterate through all object parents to find attribute
+            for attribute in self._attributes_as_parents:
+                parent_object = super().__getattribute__(attribute)
+                if name in dir(parent_object):
+                    return getattr(parent_object, name)
+
+        # If the item is an attribute in self or not in any object parent return attribute
+        return super().__getattribute__(name)
+
+    def __setattr__(self, name, value):
+        # Check if item is in self and if not check in object parents
+        if name not in self._attributes_as_parents and name not in dir(self):
+            # Iterate through all indirect parents to find attribute
+            for attribute in self._attributes_as_parents:
+                if attribute in dir(self):
+                    parent_object = super().__getattribute__(attribute)
+                    if name in dir(parent_object):
+                        return setattr(parent_object, name, value)
+
+        # If the item is an attribute in self or not in any indirect parent set as attribute
+        return super().__setattr__(name, value)
+
+
+class AdvanceLogger(ObjectInheritor):
+    _indirect_parents = ["_logger"]
+
+    def __init__(self, name):
+        self._logger = logging.getLogger(name)
+
+
+class ObjectWithLogging(abc.ABC):
+    default_logger = None
+
+    def __init__(self):
+        self.logger = self.default_logger
+
+
 class Interrupt(object):
     def __init__(self, master=None):
         self.master = master
@@ -1377,7 +1427,8 @@ class SeparateProcess(object):
             self.process.close()
 
 
-class ProcessingUnit(object):
+class ProcessingUnit(ObjectInheritor):
+    _attributes_as_parents = ["_task_object"]
     DEFAULT_TASK = Task
 
     # Construction/Destruction
@@ -1415,62 +1466,6 @@ class ProcessingUnit(object):
         if self.is_processing():
             warnings.warn()
         self._task_object = value
-
-    @property
-    def events(self):
-        if self.task_object is not None:
-            return self.task_object.events
-        else:
-            return None
-
-    @events.setter
-    def events(self, value):
-        if self.task_object is not None:
-            self.task_object.events = value
-        else:
-            raise NameError
-
-    @property
-    def locks(self):
-        if self.task_object is not None:
-            return self.task_object.locks
-        else:
-            return None
-
-    @locks.setter
-    def locks(self, value):
-        if self.task_object is not None:
-            self.task_object.locks = value
-        else:
-            raise NameError
-
-    @property
-    def inputs(self):
-        if self.task_object is not None:
-            return self.task_object.inputs
-        else:
-            return None
-
-    @inputs.setter
-    def inputs(self, value):
-        if self.task_object is not None:
-            self.task_object.inputs = value
-        else:
-            raise NameError
-
-    @property
-    def outputs(self):
-        if self.task_object is not None:
-            return self.task_object.outputs
-        else:
-            return None
-
-    @outputs.setter
-    def outputs(self, value):
-        if self.task_object is not None:
-            self.task_object.outputs = value
-        else:
-            raise NameError
 
     # Constructors
     def construct(self, name=None, task=None, to_kwargs={}, daemon=False, p_kwargs={}):
@@ -1730,54 +1725,6 @@ class ProcessingCluster(ProcessingUnit):
 
         if init:
             self.construct(name)
-
-    @property
-    def execution_order(self):
-        return self.task_object.execution_order
-
-    @execution_order.setter
-    def execution_order(self, value):
-        self.task_object.execution_order = value
-
-    @property
-    def units(self):
-        return self.task_object.units
-
-    @units.setter
-    def units(self, value):
-        self.task_object.units = value
-
-    # Container Magic Methods
-    def __len__(self):
-        return len(self.task_object)
-
-    def __getitem__(self, item):
-        return self.task_object[item]
-
-    def __delitem__(self, key):
-        del self.task_object[key]
-
-    # Container Methods
-    def keys(self):
-        return self.task_object.keys()
-
-    def values(self):
-        return self.task_object.values()
-
-    def items(self):
-        return self.task_object.items()
-
-    def set_unit(self, name, unit, start=True, setup=False, closure=False, s_kwargs={}, t_kwargs={}, c_kwargs={}):
-        self.task_object.set_unit(name, unit, start, setup, closure, s_kwargs, t_kwargs, c_kwargs)
-
-    def extend(self, units):
-        self.task_object.extend(units=units)
-
-    def pop(self, name):
-        return self.task_object.pop(name)
-
-    def clear(self):
-        self.task_object.clear()
 
     # Execution
     def stop(self, join=True, timeout=None):
