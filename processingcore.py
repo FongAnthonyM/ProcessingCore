@@ -39,7 +39,7 @@ class ObjectInheritor(abc.ABC):
     # Attribute Access
     def __getattribute__(self, name):
         # Check if item is in self and if not check in the object parents
-        if name not in {"__dict__", "__class__", "_attributes_as_parents"} and \
+        if name[0:2] != "__" and name not in {"_attributes_as_parents"} and \
            name not in self._attributes_as_parents and name not in dir(self):
             # Iterate through all object parents to find attribute
             for attribute in self._attributes_as_parents:
