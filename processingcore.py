@@ -91,6 +91,7 @@ class AdvanceLogger(ObjectInheritor):
         logging.config.fileConfig(fname, defaults, disable_existing_loggers)
         return cls(name, **kwargs)
 
+    # Construction/Destruction
     def __init__(self, obj=None, module_of_class="(Not Given)", init=True):
         self.allow_append = False
 
@@ -106,17 +107,20 @@ class AdvanceLogger(ObjectInheritor):
     def name_parent(self):
         return self.name.rsplit('.', 1)[0]
 
-    # Todo: May need Pickling for multiprocessing
-
+    @property
     def name_stem(self):
         return self.name.rsplit('.', 1)[0]
 
+    # Todo: May need Pickling for multiprocessing
+
+    # Constructors/Destructors
     def construct(self, obj=None):
         if isinstance(obj, logging.Logger):
             self._logger = obj
         else:
             self._logger = logging.getLogger(obj)
 
+    # Logger Editing
     def set_logger(self, logger):
         self._logger = logger
 
@@ -138,10 +142,19 @@ class AdvanceLogger(ObjectInheritor):
         self.copy_logger_attributes(new_logger)
         self._logger = new_logger
 
+    # Defaults
     def append_module_info(self):
         self.append_message = "Class' Module: %s Object Module: %s " % (self.module_of_class, self.module_of_object)
         self.allow_append = True
 
+    def add_default_stream_handler(self, level=logging.DEBUG):
+        handler = logging.StreamHandler()
+        handler.setLevel(level)
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        handler.setFormatter(formatter)
+        self.addHandler(handler)
+
+    # Override Logger Methods
     def debug(self, msg, *args, append=None, **kwargs):
         if append or (append is None and self.allow_append):
             msg = self.append_message + msg
@@ -182,7 +195,7 @@ class ObjectWithLogging(abc.ABC):
     default_logger = AdvanceLogger()
 
     def __init__(self):
-        self.logger = self.default_logger
+        self.loggers = {"main": self.default_logger}
 
 
 class Interrupt(object):
@@ -912,12 +925,9 @@ class OutputsHandler(object):
 
 
 class Task(ObjectWithLogging):
-    default_logger = AdvanceLogger()
+    default_logger = AdvanceLogger("tasklogger")
     default_logger.setLevel(logging.DEBUG)
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    default_logger.addHandler(ch)
+    default_logger.add_default_stream_handler()
 
     # Construction/Destruction
     def __init__(self, name=None, allow_setup=True, allow_closure=True,
@@ -1025,7 +1035,7 @@ class Task(ObjectWithLogging):
     def run_normal(self, s_kwargs={}, t_kwargs={}, c_kwargs={}):
         # Optionally run Setup
         if self.allow_setup:
-            self.logger.debug("Setup logging")
+            self.loggers["main"].debug("Setup logging")
             if s_kwargs:
                 self.setup_kwargs = s_kwargs
             self._execute_setup(**self.setup_kwargs)
@@ -1047,7 +1057,7 @@ class Task(ObjectWithLogging):
 
         # Optionally run Setup
         if self.allow_setup:
-            self.logger.debug("Setup logging")
+            self.loggers["main"].debug("Setup logging")
             if s_kwargs:
                 self.setup_kwargs = s_kwargs
             self._execute_setup(**self.setup_kwargs)
@@ -1067,7 +1077,7 @@ class Task(ObjectWithLogging):
     async def run_coro(self, s_kwargs={}, t_kwargs={}, c_kwargs={}):
         # Optionally run Setup
         if self.allow_setup:
-            self.logger.debug("Setup logging")
+            self.loggers["main"].debug("Setup logging")
             if s_kwargs:
                 self.setup_kwargs = s_kwargs
             if asyncio.iscoroutinefunction(self._execute_setup):
@@ -1097,7 +1107,7 @@ class Task(ObjectWithLogging):
 
         # Optionally run Setup
         if self.allow_setup:
-            self.logger.debug("Setup logging")
+            self.loggers["main"].debug("Setup logging")
             if s_kwargs:
                 self.setup_kwargs = s_kwargs
             if asyncio.iscoroutinefunction(self._execute_setup):
