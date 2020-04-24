@@ -84,7 +84,7 @@ class ObjectInheritor(abc.ABC):
 
 
 class AdvanceLogger(ObjectInheritor):
-    _indirect_parents = ["_logger"]
+    _attributes_as_parents = ["_logger"]
 
     @classmethod
     def from_config(cls, name, fname, defaults=None, disable_existing_loggers=True, **kwargs):
