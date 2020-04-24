@@ -914,6 +914,10 @@ class OutputsHandler(object):
 class Task(ObjectWithLogging):
     default_logger = AdvanceLogger()
     default_logger.setLevel(logging.DEBUG)
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    default_logger.addHandler(ch)
 
     # Construction/Destruction
     def __init__(self, name=None, allow_setup=True, allow_closure=True,
