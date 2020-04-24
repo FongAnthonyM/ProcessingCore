@@ -16,6 +16,7 @@ __status__ = "Prototype"
 import abc
 import asyncio
 import copy
+import datetime
 import logging
 import logging.config
 import multiprocessing
@@ -81,6 +82,20 @@ class ObjectInheritor(abc.ABC):
 
     def _setattr(self, name, value):
         super().__setattr__(name, value)
+
+
+class PreciseFormatter(logging.Formatter):
+    converter = datetime.datetime.fromtimestamp
+    default_msec_format = "%s.%06d"
+
+    def formatTime(self, record, datefmt=None):
+        ct = self.converter(record.created)
+        if datefmt:
+            s = ct.strftime(datefmt)
+        else:
+            t = ct.strftime(self.default_time_format)
+            s = self.default_msec_format % (t, ct.microsecond)
+        return s
 
 
 class AdvanceLogger(ObjectInheritor):
@@ -151,8 +166,7 @@ class AdvanceLogger(ObjectInheritor):
     def add_default_stream_handler(self, level=logging.DEBUG):
         handler = logging.StreamHandler()
         handler.setLevel(level)
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        formatter.default_msec_format = "%s,%06d"
+        formatter = PreciseFormatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         handler.setFormatter(formatter)
         self.addHandler(handler)
 
