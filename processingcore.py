@@ -1021,6 +1021,10 @@ class Task(ObjectWithLogging):
     def set_lock(self, name, lock):
         self.locks[name] = lock
 
+    # Logging
+    def debug_formatting(self, func, msg):
+        return "%s(%s) -> %s: %s" % (self.__class__, self.name, func, msg)
+
     # Setup
     def setup(self):
         pass
@@ -1051,18 +1055,20 @@ class Task(ObjectWithLogging):
     def run_normal(self, s_kwargs={}, t_kwargs={}, c_kwargs={}):
         # Optionally run Setup
         if self.allow_setup:
-            self.loggers["main"].debug("Setup logging")
+            self.loggers["main"].debug(self.debug_formatting("run_normal", "Running setup"))
             if s_kwargs:
                 self.setup_kwargs = s_kwargs
             self._execute_setup(**self.setup_kwargs)
 
         # Run Task
+        self.loggers["main"].debug(self.debug_formatting("run_normal", "Running task"))
         if t_kwargs:
             self.task_kwargs = t_kwargs
         self._execute_task(**self.task_kwargs)
 
         # Optionally run Closure
         if self.allow_closure:
+            self.loggers["main"].debug(self.debug_formatting("run_normal", "Running closure"))
             if c_kwargs:
                 self.closure_kwargs = c_kwargs
             self._execute_closure(**self.closure_kwargs)
@@ -1073,18 +1079,20 @@ class Task(ObjectWithLogging):
 
         # Optionally run Setup
         if self.allow_setup:
-            self.loggers["main"].debug("Setup logging")
+            self.loggers["main"].debug(self.debug_formatting("start_normal", "Running setup"))
             if s_kwargs:
                 self.setup_kwargs = s_kwargs
             self._execute_setup(**self.setup_kwargs)
 
         # Run Task Loop
+        self.loggers["main"].debug(self.debug_formatting("start_normal", "Running task"))
         if t_kwargs:
             self.task_kwargs = t_kwargs
         self._execute_task_loop(**self.task_kwargs)
 
         # Optionally run Closure
         if self.allow_closure:
+            self.loggers["main"].debug(self.debug_formatting("start_normal", "Running closure"))
             if c_kwargs:
                 self.closure_kwargs = c_kwargs
             self._execute_closure(**self.closure_kwargs)
@@ -1093,7 +1101,7 @@ class Task(ObjectWithLogging):
     async def run_coro(self, s_kwargs={}, t_kwargs={}, c_kwargs={}):
         # Optionally run Setup
         if self.allow_setup:
-            self.loggers["main"].debug("Setup logging")
+            self.loggers["main"].debug(self.debug_formatting("run_coro", "Running setup"))
             if s_kwargs:
                 self.setup_kwargs = s_kwargs
             if asyncio.iscoroutinefunction(self._execute_setup):
@@ -1102,6 +1110,7 @@ class Task(ObjectWithLogging):
                 self._execute_setup(**self.setup_kwargs)
 
         # Run Task
+        self.loggers["main"].debug(self.debug_formatting("run_coro", "Running task"))
         if t_kwargs:
             self.task_kwargs = t_kwargs
         if asyncio.iscoroutinefunction(self._execute_task):
@@ -1111,6 +1120,7 @@ class Task(ObjectWithLogging):
 
         # Optionally run Closure
         if self.allow_closure:
+            self.loggers["main"].debug(self.debug_formatting("run_coro", "Running closure"))
             if c_kwargs:
                 self.closure_kwargs = c_kwargs
             if asyncio.iscoroutinefunction(self._execute_closure):
@@ -1123,7 +1133,7 @@ class Task(ObjectWithLogging):
 
         # Optionally run Setup
         if self.allow_setup:
-            self.loggers["main"].debug("Setup logging")
+            self.loggers["main"].debug(self.debug_formatting("start_coro", "Running setup"))
             if s_kwargs:
                 self.setup_kwargs = s_kwargs
             if asyncio.iscoroutinefunction(self._execute_setup):
@@ -1131,7 +1141,8 @@ class Task(ObjectWithLogging):
             else:
                 self._execute_setup(**self.setup_kwargs)
 
-        # Run Task
+        # Run Task Loop
+        self.loggers["main"].debug(self.debug_formatting("start_coro", "Running task"))
         if t_kwargs:
             self.task_kwargs = t_kwargs
         if asyncio.iscoroutinefunction(self._execute_task):
@@ -1141,6 +1152,7 @@ class Task(ObjectWithLogging):
 
         # Optionally run Closure
         if self.allow_closure:
+            self.loggers["main"].debug(self.debug_formatting("start_coro", "Running closure"))
             if c_kwargs:
                 self.closure_kwargs = c_kwargs
             if asyncio.iscoroutinefunction(self._execute_closure):
