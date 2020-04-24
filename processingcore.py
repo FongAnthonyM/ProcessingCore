@@ -1042,6 +1042,7 @@ class Task(ObjectWithLogging):
 
         # Optionally run Setup
         if self.allow_setup:
+            self.logger.debug("Setup logging")
             if s_kwargs:
                 self.setup_kwargs = s_kwargs
             self._execute_setup(**self.setup_kwargs)
@@ -1061,6 +1062,7 @@ class Task(ObjectWithLogging):
     async def run_coro(self, s_kwargs={}, t_kwargs={}, c_kwargs={}):
         # Optionally run Setup
         if self.allow_setup:
+            self.logger.debug("Setup logging")
             if s_kwargs:
                 self.setup_kwargs = s_kwargs
             if asyncio.iscoroutinefunction(self._execute_setup):
@@ -1090,6 +1092,7 @@ class Task(ObjectWithLogging):
 
         # Optionally run Setup
         if self.allow_setup:
+            self.logger.debug("Setup logging")
             if s_kwargs:
                 self.setup_kwargs = s_kwargs
             if asyncio.iscoroutinefunction(self._execute_setup):
