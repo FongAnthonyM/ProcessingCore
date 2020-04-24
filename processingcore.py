@@ -913,6 +913,7 @@ class OutputsHandler(object):
 
 class Task(ObjectWithLogging):
     default_logger = AdvanceLogger()
+    default_logger.setLevel(logging.DEBUG)
 
     # Construction/Destruction
     def __init__(self, name=None, allow_setup=True, allow_closure=True,
