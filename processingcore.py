@@ -85,6 +85,7 @@ class ObjectInheritor(abc.ABC):
 
 class AdvanceLogger(ObjectInheritor):
     _attributes_as_parents = ["_logger"]
+    PRECISE_DATEFMT = "%Y-%m-%d %H:%M:%S,uuuuuu"
 
     @classmethod
     def from_config(cls, name, fname, defaults=None, disable_existing_loggers=True, **kwargs):
@@ -150,7 +151,7 @@ class AdvanceLogger(ObjectInheritor):
     def add_default_stream_handler(self, level=logging.DEBUG):
         handler = logging.StreamHandler()
         handler.setLevel(level)
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s', self.PRECISE_DATEFMT)
         handler.setFormatter(formatter)
         self.addHandler(handler)
 
