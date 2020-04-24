@@ -15,7 +15,9 @@ __status__ = "Prototype"
 # Default Libraries #
 import abc
 import asyncio
+import copy
 import logging
+import logging.config
 import multiprocessing
 from multiprocessing import Process, Pool, Lock, Event, Queue, Pipe
 import queue
@@ -35,6 +37,20 @@ import time
 # Classes #
 class ObjectInheritor(abc.ABC):
     _attributes_as_parents = []
+
+    def __copy__(self):
+        new = type(self)()
+        new.__dict__.update(self.__dict__)
+        return new
+
+    def __deepcopy__(self, memo={}):
+        new = type(self)()
+        for attribute in self._attributes_as_parents:
+            if attribute in dir(self):
+                parent_object = copy.deepcopy(super().__getattribute__(attribute))
+                setattr(new, attribute, parent_object)
+        new.__dict__.update(self.__dict__)
+        return new
 
     # Attribute Access
     def __getattribute__(self, name):
@@ -70,12 +86,100 @@ class ObjectInheritor(abc.ABC):
 class AdvanceLogger(ObjectInheritor):
     _indirect_parents = ["_logger"]
 
-    def __init__(self, name):
+    @classmethod
+    def from_config(cls, name, fname, defaults=None, disable_existing_loggers=True, **kwargs):
+        logging.config.fileConfig(fname, defaults, disable_existing_loggers)
+        return cls(name, **kwargs)
+
+    def __init__(self, obj=None, module_of_class="(Not Given)", init=True):
+        self.allow_append = False
+
+        self._logger = None
+        self.module_of_class = module_of_class
+        self.module_of_object = "(Not Given)"
+        self.append_message = ""
+
+        if init:
+            self.construct(obj)
+
+    @property
+    def name_parent(self):
+        return self.name.rsplit('.', 1)[0]
+
+    # Todo: May need Pickling for multiprocessing
+
+    def name_stem(self):
+        return self.name.rsplit('.', 1)[0]
+
+    def construct(self, obj=None):
+        if isinstance(obj, logging.Logger):
+            self._logger = obj
+        else:
+            self._logger = logging.getLogger(obj)
+
+    def set_logger(self, logger):
+        self._logger = logger
+
+    def fileConfig(self, name, fname, defaults=None, disable_existing_loggers=True):
+        logging.config.fileConfig(fname, defaults, disable_existing_loggers)
         self._logger = logging.getLogger(name)
+
+    def copy_logger_attributes(self, logger):
+        logger.propagate = self.propagate
+        logger.setLevel(self.getEffectiveLevel())
+        for filter_ in self.filters:
+            logger.addFilter(filter_)
+        for handler in self.handlers:
+            logger.addHandler(handler)
+        return logger
+
+    def setParent(self, parent):
+        new_logger = parent.getChild(self.name_stem)
+        self.copy_logger_attributes(new_logger)
+        self._logger = new_logger
+
+    def append_module_info(self):
+        self.append_message = "Class' Module: %s Object Module: %s " % (self.module_of_class, self.module_of_object)
+        self.allow_append = True
+
+    def debug(self, msg, *args, append=None, **kwargs):
+        if append or (append is None and self.allow_append):
+            msg = self.append_message + msg
+        self._logger.debug(msg, *args, **kwargs)
+
+    def info(self, msg, *args, append=None, **kwargs):
+        if append or (append is None and self.allow_append):
+            msg = self.append_message + msg
+        self._logger.info(msg, *args, **kwargs)
+
+    def warning(self, msg, *args, append=None, **kwargs):
+        if append or (append is None and self.allow_append):
+            msg = self.append_message + msg
+        self._logger.warning(msg, *args, **kwargs)
+
+    def error(self, msg, *args, append=None, **kwargs):
+        if append or (append is None and self.allow_append):
+            msg = self.append_message + msg
+        self._logger.error(msg, *args, **kwargs)
+
+    def critical(self, msg, *args, append=None, **kwargs):
+        if append or (append is None and self.allow_append):
+            msg = self.append_message + msg
+        self._logger.critical(msg, *args, **kwargs)
+
+    def log(self, level, msg, *args, append=None, **kwargs):
+        if append or (append is None and self.allow_append):
+            msg = self.append_message + msg
+        self._logger.critical(level, msg, *args, **kwargs)
+
+    def exception(self, msg, *args, append=None, **kwargs):
+        if append or (append is None and self.allow_append):
+            msg = self.append_message + msg
+        self._logger.exception(msg, *args, **kwargs)
 
 
 class ObjectWithLogging(abc.ABC):
-    default_logger = None
+    default_logger = AdvanceLogger()
 
     def __init__(self):
         self.logger = self.default_logger
@@ -807,10 +911,13 @@ class OutputsHandler(object):
         self.interrupts.interrupt_all_processes()
 
 
-class Task(object):
+class Task(ObjectWithLogging):
+    default_logger = AdvanceLogger()
+
     # Construction/Destruction
     def __init__(self, name=None, allow_setup=True, allow_closure=True,
                  s_kwargs={}, t_kwargs={}, c_kwargs={}, init=True):
+        super().__init__()
         self.name = name
         self.async_loop = asyncio.get_event_loop()
         self.setup_kwargs = s_kwargs
@@ -913,6 +1020,7 @@ class Task(object):
     def run_normal(self, s_kwargs={}, t_kwargs={}, c_kwargs={}):
         # Optionally run Setup
         if self.allow_setup:
+            self.logger.debug("Setup logging")
             if s_kwargs:
                 self.setup_kwargs = s_kwargs
             self._execute_setup(**self.setup_kwargs)
