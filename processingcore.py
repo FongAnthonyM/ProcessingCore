@@ -100,7 +100,6 @@ class PreciseFormatter(logging.Formatter):
 
 class AdvanceLogger(ObjectInheritor):
     _attributes_as_parents = ["_logger"]
-    PRECISE_DATEFMT = "%Y-%m-%d %H:%M:%S,uuu"
 
     @classmethod
     def from_config(cls, name, fname, defaults=None, disable_existing_loggers=True, **kwargs):
@@ -208,14 +207,14 @@ class AdvanceLogger(ObjectInheritor):
 
 
 class ObjectWithLogging(abc.ABC):
-    default_logger = AdvanceLogger()
+    class_loggers = {}
 
     def __init__(self):
-        self.loggers = {"main": self.default_logger}
+        self.loggers = self.class_loggers.copy()
 
     # Logging
-    def debug_formatting(self, func, msg):
-        return "%s(%s) -> %s: %s" % (self.__class__, self.name, func, msg)
+    def traceback_formatting(self, func, msg, name=""):
+        return "%s(%s) -> %s: %s" % (self.__class__, name, func, msg)
 
 
 class Interrupt(object):
@@ -945,9 +944,7 @@ class OutputsHandler(object):
 
 
 class Task(ObjectWithLogging):
-    default_logger = AdvanceLogger("tasklogger")
-    default_logger.setLevel(logging.DEBUG)
-    default_logger.add_default_stream_handler()
+    class_loggers = {"task_root": AdvanceLogger("task_root")}
 
     # Construction/Destruction
     def __init__(self, name=None, allow_setup=True, allow_closure=True,
@@ -1027,11 +1024,11 @@ class Task(ObjectWithLogging):
 
     # Setup
     def setup(self):
-        self.loggers["main"].debug(self.debug_formatting("setup", "setup method not overridden"))
+        self.loggers["task_root"].debug(self.traceback_formatting("setup", "setup method not overridden", self.name))
 
     # Task
     def task(self):
-        self.loggers["main"].debug(self.debug_formatting("task", "task method not overridden"))
+        self.loggers["task_root"].debug(self.traceback_formatting("task", "task method not overridden", self.name))
 
     def task_loop(self, **kwargs):
         while not self.stop_event.is_set():
@@ -1049,7 +1046,7 @@ class Task(ObjectWithLogging):
 
     # Closure
     def closure(self):
-        self.loggers["main"].debug(self.debug_formatting("closure", "closure method not overridden"))
+        self.loggers["task_root"].debug(self.traceback_formatting("closure", "closure method not overridden", self.name))
 
     # Normal Execute Methods
     def run_normal(self, s_kwargs={}, t_kwargs={}, c_kwargs={}):
@@ -1057,20 +1054,20 @@ class Task(ObjectWithLogging):
         if self.allow_setup:
             if s_kwargs:
                 self.setup_kwargs = s_kwargs
-            self.loggers["main"].debug(self.debug_formatting("run_normal", "Running setup"))
+            self.loggers["task_root"].debug(self.traceback_formatting("run_normal", "Running setup", self.name))
             self._execute_setup(**self.setup_kwargs)
 
         # Run Task
         if t_kwargs:
             self.task_kwargs = t_kwargs
-        self.loggers["main"].debug(self.debug_formatting("run_normal", "Running task"))
+        self.loggers["task_root"].debug(self.traceback_formatting("run_normal", "Running task", self.name))
         self._execute_task(**self.task_kwargs)
 
         # Optionally run Closure
         if self.allow_closure:
             if c_kwargs:
                 self.closure_kwargs = c_kwargs
-            self.loggers["main"].debug(self.debug_formatting("run_normal", "Running closure"))
+            self.loggers["task_root"].debug(self.traceback_formatting("run_normal", "Running closure", self.name))
             self._execute_closure(**self.closure_kwargs)
 
     def start_normal(self, s_kwargs={}, t_kwargs={}, c_kwargs={}):
@@ -1081,11 +1078,11 @@ class Task(ObjectWithLogging):
         if self.allow_setup:
             if s_kwargs:
                 self.setup_kwargs = s_kwargs
-            self.loggers["main"].debug(self.debug_formatting("start_normal", "Running setup"))
+            self.loggers["task_root"].debug(self.traceback_formatting("start_normal", "Running setup", self.name))
             self._execute_setup(**self.setup_kwargs)
 
         # Run Task Loop
-        self.loggers["main"].debug(self.debug_formatting("start_normal", "Running task"))
+        self.loggers["task_root"].debug(self.traceback_formatting("start_normal", "Running task", self.name))
         if t_kwargs:
             self.task_kwargs = t_kwargs
         self._execute_task_loop(**self.task_kwargs)
@@ -1094,7 +1091,7 @@ class Task(ObjectWithLogging):
         if self.allow_closure:
             if c_kwargs:
                 self.closure_kwargs = c_kwargs
-            self.loggers["main"].debug(self.debug_formatting("start_normal", "Running closure"))
+            self.loggers["task_root"].debug(self.traceback_formatting("start_normal", "Running closure", self.name))
             self._execute_closure(**self.closure_kwargs)
 
     # Async Execute Methods
@@ -1104,32 +1101,32 @@ class Task(ObjectWithLogging):
             if s_kwargs:
                 self.setup_kwargs = s_kwargs
             if asyncio.iscoroutinefunction(self._execute_setup):
-                self.loggers["main"].debug(self.debug_formatting("run_coro", "Running async setup"))
+                self.loggers["task_root"].debug(self.traceback_formatting("run_coro", "Running async setup", self.name))
                 await self._execute_setup(**self.setup_kwargs)
             else:
-                self.loggers["main"].debug(self.debug_formatting("run_coro", "Running setup"))
+                self.loggers["task_root"].debug(self.traceback_formatting("run_coro", "Running setup", self.name))
                 self._execute_setup(**self.setup_kwargs)
 
         # Run Task
         if t_kwargs:
             self.task_kwargs = t_kwargs
         if asyncio.iscoroutinefunction(self._execute_task):
-            self.loggers["main"].debug(self.debug_formatting("run_coro", "Running async task"))
+            self.loggers["task_root"].debug(self.traceback_formatting("run_coro", "Running async task", self.name))
             await self._execute_task(**self.task_kwargs)
         else:
-            self.loggers["main"].debug(self.debug_formatting("run_coro", "Running task"))
+            self.loggers["task_root"].debug(self.traceback_formatting("run_coro", "Running task", self.name))
             self._execute_task(**self.task_kwargs)
 
         # Optionally run Closure
         if self.allow_closure:
-            self.loggers["main"].debug(self.debug_formatting("run_coro", "Running closure"))
+            self.loggers["task_root"].debug(self.traceback_formatting("run_coro", "Running closure", self.name))
             if c_kwargs:
                 self.closure_kwargs = c_kwargs
             if asyncio.iscoroutinefunction(self._execute_closure):
-                self.loggers["main"].debug(self.debug_formatting("start_coro", "Running async closure"))
+                self.loggers["task_root"].debug(self.traceback_formatting("start_coro", "Running async closure", self.name))
                 await self._execute_closure(**self.closure_kwargs)
             else:
-                self.loggers["main"].debug(self.debug_formatting("start_coro", "Running closure"))
+                self.loggers["task_root"].debug(self.traceback_formatting("start_coro", "Running closure", self.name))
                 self._execute_closure(**self.closure_kwargs)
 
     async def start_coro(self, s_kwargs={}, t_kwargs={}, c_kwargs={}):
@@ -1140,20 +1137,20 @@ class Task(ObjectWithLogging):
             if s_kwargs:
                 self.setup_kwargs = s_kwargs
             if asyncio.iscoroutinefunction(self._execute_setup):
-                self.loggers["main"].debug(self.debug_formatting("start_coro", "Running async setup"))
+                self.loggers["task_root"].debug(self.traceback_formatting("start_coro", "Running async setup", self.name))
                 await self._execute_setup(**self.setup_kwargs)
             else:
-                self.loggers["main"].debug(self.debug_formatting("start_coro", "Running setup"))
+                self.loggers["task_root"].debug(self.traceback_formatting("start_coro", "Running setup", self.name))
                 self._execute_setup(**self.setup_kwargs)
 
         # Run Task Loop
         if t_kwargs:
             self.task_kwargs = t_kwargs
         if asyncio.iscoroutinefunction(self._execute_task):
-            self.loggers["main"].debug(self.debug_formatting("start_coro", "Starting async task"))
+            self.loggers["task_root"].debug(self.traceback_formatting("start_coro", "Starting async task", self.name))
             await self._execute_task_loop(**self.task_kwargs)
         else:
-            self.loggers["main"].debug(self.debug_formatting("start_coro", "Starting task"))
+            self.loggers["task_root"].debug(self.traceback_formatting("start_coro", "Starting task", self.name))
             self._execute_task_loop(**self.task_kwargs)
 
         # Optionally run Closure
@@ -1161,10 +1158,10 @@ class Task(ObjectWithLogging):
             if c_kwargs:
                 self.closure_kwargs = c_kwargs
             if asyncio.iscoroutinefunction(self._execute_closure):
-                self.loggers["main"].debug(self.debug_formatting("start_coro", "Running async closure"))
+                self.loggers["task_root"].debug(self.traceback_formatting("start_coro", "Running async closure", self.name))
                 await self._execute_closure(**self.closure_kwargs)
             else:
-                self.loggers["main"].debug(self.debug_formatting("start_coro", "Running closure"))
+                self.loggers["task_root"].debug(self.traceback_formatting("start_coro", "Running closure", self.name))
                 self._execute_closure(**self.closure_kwargs)
 
     # Set Execution Methods
@@ -1214,6 +1211,7 @@ class Task(ObjectWithLogging):
         return asyncio.create_task(self.start_coro(s_kwargs, t_kwargs, c_kwargs))
 
     def stop(self):
+        self.loggers["task_root"].debug(self.traceback_formatting("stop", "Stop was called", self.name))
         self.stop_event.set()
         self.inputs.stop_all()
         self.outputs.stop_all()
@@ -1223,6 +1221,7 @@ class Task(ObjectWithLogging):
 
 
 class MultiUnitTask(Task):
+    super().class_loggers["test"] = AdvanceLogger("test")
     SETTING_NAMES = {"unit", "start", "setup", "closure", "s_kwargs", "t_kwargs", "c_kwargs"}
 
     # Construction/Destruction
@@ -1332,6 +1331,7 @@ class MultiUnitTask(Task):
             unit = self.units[name]
             execution_kwargs = self.execution_kwargs[name]
             if execution_kwargs["setup"]:
+                self.loggers["task_root"].debug(self.traceback_formatting("setup", "Running %s setup" % unit.name, self.name))
                 unit.allow_setup = False
                 unit.setup(**execution_kwargs["c_kwargs"])
             if execution_kwargs["closure"]:
@@ -1445,12 +1445,14 @@ class MultiUnitTask(Task):
             self.units[name].reset()
 
 
-class SeparateProcess(ObjectInheritor):
+class SeparateProcess(ObjectInheritor, ObjectWithLogging):
     _attributes_as_parents = ["_process"]
     CPU_COUNT = multiprocessing.cpu_count()
+    class_loggers = {"separate_process": AdvanceLogger("separate_process")}
 
     # Construction/Destruction
     def __init__(self, target=None, name=None, daemon=False, init=False, kwargs={}):
+        super().__init__()
         self._name = name
         self._daemon = daemon
         self._target = target
@@ -1558,6 +1560,10 @@ class SeparateProcess(ObjectInheritor):
         self.process = Process(target=self.method_wrapper, name=self.name, daemon=self.daemon, kwargs=self.target_kwargs)
 
     # Execution
+    def start(self):
+        self.loggers["separate_process"].debug(self.traceback_formatting("start", "Spawning new process...", self.name))
+        self.process.start()
+
     async def join_async(self, timeout=None, interval=0.0):
         start_time = time.perf_counter()
         while self.process.join(0) is None:
@@ -1582,9 +1588,7 @@ class SeparateProcess(ObjectInheritor):
 
 class ProcessingUnit(ObjectInheritor, ObjectWithLogging):
     _attributes_as_parents = ["_task_object"]
-    default_logger = AdvanceLogger("processlogger")
-    default_logger.setLevel(logging.DEBUG)
-    default_logger.add_default_stream_handler()
+    class_loggers = {"processor_root": AdvanceLogger("processor_root")}
     DEFAULT_TASK = Task
 
     # Construction/Destruction
@@ -1663,11 +1667,11 @@ class ProcessingUnit(ObjectInheritor, ObjectWithLogging):
 
     # Setup
     def setup(self):
-        self.loggers["main"].debug(self.debug_formatting("setup", "setup method not overridden"))
+        self.loggers["processor_root"].debug(self.traceback_formatting("setup", "setup method not overridden", self.name))
 
     # Closure
     def closure(self):
-        self.loggers["main"].debug(self.debug_formatting("closure", "closure method not overridden"))
+        self.loggers["processor_root"].debug(self.traceback_formatting("closure", "closure method not overridden", self.name))
 
     # Normal Execution Methods
     def run_normal(self, s_kwargs={}, t_kwargs={}, c_kwargs={}):
@@ -1675,27 +1679,27 @@ class ProcessingUnit(ObjectInheritor, ObjectWithLogging):
         kwargs = {"s_kwargs": s_kwargs, "t_kwargs": t_kwargs, "c_kwargs": c_kwargs}
         # Optionally run Setup
         if self.allow_setup:
-            self.loggers["main"].debug(self.debug_formatting("run_normal", "Running setup"))
+            self.loggers["processor_root"].debug(self.traceback_formatting("run_normal", "Running setup", self.name))
             self._execute_setup(**self.unit_setup_kwargs)
 
         # Run Task
         if self.separate_process:
-            self.loggers["main"].debug(self.debug_formatting("run_normal", "Running task in separate process"))
+            self.loggers["processor_root"].debug(self.traceback_formatting("run_normal", "Running task in separate process", self.name))
             self.process.target_object_method(self.task_object, "run", kwargs=kwargs)
             self.process.start()
         else:
-            self.loggers["main"].debug(self.debug_formatting("run_normal", "Running task"))
+            self.loggers["processor_root"].debug(self.traceback_formatting("run_normal", "Running task", self.name))
             self.task_object.run(**kwargs)
 
         # Optionally run Closure
         if self.allow_closure:
-            self.loggers["main"].debug(self.debug_formatting("start_normal", "Waiting for process to join (Blocking)"))
+            self.loggers["processor_root"].debug(self.traceback_formatting("start_normal", "Waiting for process to join (Blocking)", self.name))
             if self.separate_process:
                 if self.await_closure:
                     self.process.join()
                 else:
-                    warnings.warn("Run Though! Process could still be running")
-            self.loggers["main"].debug(self.debug_formatting("run_normal", "Running closure"))
+                    warnings.warn("Run Though! Process could still be running", self.name)
+            self.loggers["processor_root"].debug(self.traceback_formatting("run_normal", "Running closure", self.name))
             self._execute_closure(**self.unit_closure_kwargs)
         self._joined = True
 
@@ -1704,27 +1708,27 @@ class ProcessingUnit(ObjectInheritor, ObjectWithLogging):
         kwargs = {"s_kwargs": s_kwargs, "t_kwargs": t_kwargs, "c_kwargs": c_kwargs}
         # Optionally run Setup
         if self.allow_setup:
-            self.loggers["main"].debug(self.debug_formatting("start_normal", "Running setup"))
+            self.loggers["processor_root"].debug(self.traceback_formatting("start_normal", "Running setup", self.name))
             self._execute_setup(**self.unit_setup_kwargs)
 
         # Run Task
         if self.separate_process:
-            self.loggers["main"].debug(self.debug_formatting("start_normal", "Starting task in separate process"))
+            self.loggers["processor_root"].debug(self.traceback_formatting("start_normal", "Starting task in separate process", self.name))
             self.process.target_object_method(self.task_object, "start", kwargs=kwargs)
             self.process.start()
         else:
-            self.loggers["main"].debug(self.debug_formatting("run_normal", "Starting task"))
+            self.loggers["processor_root"].debug(self.traceback_formatting("run_normal", "Starting task"))
             self.task_object.start(**kwargs)
 
         # Optionally run Closure
         if self.allow_closure:
-            self.loggers["main"].debug(self.debug_formatting("start_normal", "Waiting for process to join (Blocking)"))
+            self.loggers["processor_root"].debug(self.traceback_formatting("start_normal", "Waiting for process to join (Blocking)", self.name))
             if self.separate_process:
                 if self.await_closure:
                     self.process.join()
                 else:
                     warnings.warn("Run Though! Process could still be running")
-            self.loggers["main"].debug(self.debug_formatting("start_normal", "Running closure"))
+            self.loggers["processor_root"].debug(self.traceback_formatting("start_normal", "Running closure", self.name))
             self._execute_closure(**self.unit_closure_kwargs)
         self._joined = True
 
@@ -1735,38 +1739,38 @@ class ProcessingUnit(ObjectInheritor, ObjectWithLogging):
         # Optionally run Setup
         if self.allow_setup:
             if asyncio.iscoroutinefunction(self._execute_setup):
-                self.loggers["main"].debug(self.debug_formatting("run_coro", "Running async setup"))
+                self.loggers["processor_root"].debug(self.traceback_formatting("run_coro", "Running async setup", self.name))
                 await self._execute_setup(**self.unit_setup_kwargs)
             else:
-                self.loggers["main"].debug(self.debug_formatting("run_coro", "Running setup"))
+                self.loggers["processor_root"].debug(self.traceback_formatting("run_coro", "Running setup", self.name))
                 self._execute_setup(**self.unit_setup_kwargs)
 
         # Run Task
         if self.separate_process:
-            self.loggers["main"].debug(self.debug_formatting("run_coro", "Running task in separate process"))
+            self.loggers["processor_root"].debug(self.traceback_formatting("run_coro", "Running task in separate process", self.name))
             self.process.target_object_method(self.task_object, "run", kwargs=kwargs)
             self.process.start()
         else:
             if self.task_object.is_async():
-                self.loggers["main"].debug(self.debug_formatting("run_coro", "Running async task"))
+                self.loggers["processor_root"].debug(self.traceback_formatting("run_coro", "Running async task", self.name))
                 await self.task_object.run_coro(**kwargs)
             else:
-                self.loggers["main"].debug(self.debug_formatting("run_coro", "Running task"))
+                self.loggers["processor_root"].debug(self.traceback_formatting("run_coro", "Running task", self.name))
                 self.task_object.run(**kwargs)
 
             # Optionally run Closure
             if self.allow_closure:
                 if self.separate_process:
                     if self.await_closure:
-                        self.loggers["main"].debug(self.debug_formatting("run_coro", "Awaiting process to join"))
+                        self.loggers["processor_root"].debug(self.traceback_formatting("run_coro", "Awaiting process to join", self.name))
                         await self.process.join_async()
                     else:
                         warnings.warn("Run Though! Process could still be running")
                 if asyncio.iscoroutinefunction(self._execute_closure):
-                    self.loggers["main"].debug(self.debug_formatting("run_coro", "Running async closure"))
+                    self.loggers["processor_root"].debug(self.traceback_formatting("run_coro", "Running async closure", self.name))
                     await self._execute_closure(**self.unit_closure_kwargs)
                 else:
-                    self.loggers["main"].debug(self.debug_formatting("run_coro", "Running closure"))
+                    self.loggers["processor_root"].debug(self.traceback_formatting("run_coro", "Running closure", self.name))
                     self._execute_closure(**self.unit_closure_kwargs)
         self._joined = True
 
@@ -1776,38 +1780,38 @@ class ProcessingUnit(ObjectInheritor, ObjectWithLogging):
         # Optionally run Setup
         if self.allow_setup:
             if asyncio.iscoroutinefunction(self._execute_setup):
-                self.loggers["main"].debug(self.debug_formatting("start_coro", "Running async setup"))
+                self.loggers["processor_root"].debug(self.traceback_formatting("start_coro", "Running async setup", self.name))
                 await self._execute_setup(**self.unit_setup_kwargs)
             else:
-                self.loggers["main"].debug(self.debug_formatting("start_coro", "Running setup"))
+                self.loggers["processor_root"].debug(self.traceback_formatting("start_coro", "Running setup", self.name))
                 self._execute_setup(**self.unit_setup_kwargs)
 
         # Run Task
         if self.separate_process:
-            self.loggers["main"].debug(self.debug_formatting("start_coro", "Starting task in separate process"))
+            self.loggers["processor_root"].debug(self.traceback_formatting("start_coro", "Starting task in separate process", self.name))
             self.process.target_object_method(self.task_object, "start", kwargs=kwargs)
             self.process.start()
         else:
             if self.task_object.is_async():
-                self.loggers["main"].debug(self.debug_formatting("start_coro", "Starting async task"))
+                self.loggers["processor_root"].debug(self.traceback_formatting("start_coro", "Starting async task", self.name))
                 await self.task_object.start_coro(**kwargs)
             else:
-                self.loggers["main"].debug(self.debug_formatting("start_coro", "Starting task"))
+                self.loggers["processor_root"].debug(self.traceback_formatting("start_coro", "Starting task", self.name))
                 self.task_object.start(**kwargs)
 
         # Optionally run Closure
         if self.allow_closure:
             if self.separate_process:
                 if self.await_closure:
-                    self.loggers["main"].debug(self.debug_formatting("start_coro", "Awaiting process to join"))
+                    self.loggers["processor_root"].debug(self.traceback_formatting("start_coro", "Awaiting process to join", self.name))
                     await self.process.join_async()
                 else:
                     warnings.warn("Run though! Process could still be running")
             if asyncio.iscoroutinefunction(self._execute_closure):
-                self.loggers["main"].debug(self.debug_formatting("start_coro", "Running async closure"))
+                self.loggers["processor_root"].debug(self.traceback_formatting("start_coro", "Running async closure", self.name))
                 await self._execute_closure(**self.unit_closure_kwargs)
             else:
-                self.loggers["main"].debug(self.debug_formatting("start_coro", "Running closure"))
+                self.loggers["processor_root"].debug(self.traceback_formatting("start_coro", "Running closure", self.name))
                 self._execute_closure(**self.unit_closure_kwargs)
         self._joined = True
 
