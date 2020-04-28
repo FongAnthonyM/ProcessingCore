@@ -127,6 +127,21 @@ class AdvanceLogger(ObjectInheritor):
         return self.name.rsplit('.', 1)[0]
 
     # Todo: May need Pickling for multiprocessing
+        # Pickling
+    def __getstate__(self):
+        out_dict = self.__dict__
+        out_dict["level"] = self.getEffectiveLevel()
+        out_dict["propagate"] = self.propagate
+        out_dict["handlers"] = self.handlers.copy
+        out_dict["filters"] = self.filters.copy
+        return out_dict
+
+    def __setstate__(self, in_dict):
+        in_dict["_logger"].setLevel(in_dict.pop("level"))
+        in_dict["_logger"].propagate = in_dict.pop("propagate")
+        in_dict["_logger"].handers = in_dict.pop("handlers")
+        in_dict["_logger"].handers = in_dict.pop("filters")
+        self.__dict__ = in_dict
 
     # Constructors/Destructors
     def construct(self, obj=None):
@@ -1221,7 +1236,7 @@ class Task(ObjectWithLogging):
 
 
 class MultiUnitTask(Task):
-    #class_loggers = Task.class_loggers.copy().update({"test": AdvanceLogger("test")})
+    # class_loggers = Task.class_loggers.copy().update({"test": AdvanceLogger("test")})
     SETTING_NAMES = {"unit", "start", "setup", "closure", "s_kwargs", "t_kwargs", "c_kwargs"}
 
     # Construction/Destruction
