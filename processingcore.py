@@ -24,7 +24,7 @@ import time
 
 
 # Local Libraries #
-import advancelogging
+from . import advancedlogging
 
 
 # Definitions #
@@ -755,8 +755,8 @@ class OutputsHandler(object):
         self.interrupts.interrupt_all_processes()
 
 
-class Task(advancelogging.ObjectWithLogging):
-    class_loggers = {"task_root": advancelogging.AdvanceLogger("task_root")}
+class Task(advancedlogging.ObjectWithLogging):
+    class_loggers = {"task_root": advancedlogging.AdvancedLogger("task_root")}
 
     # Construction/Destruction
     def __init__(self, name=None, allow_setup=True, allow_closure=True,
@@ -1257,10 +1257,10 @@ class MultiUnitTask(Task):
             self.units[name].reset()
 
 
-class SeparateProcess(advancelogging.ObjectInheritor, advancelogging.ObjectWithLogging):
+class SeparateProcess(advancedlogging.ObjectInheritor, advancedlogging.ObjectWithLogging):
     _attributes_as_parents = ["_process"]
     CPU_COUNT = multiprocessing.cpu_count()
-    class_loggers = {"separate_process": advancelogging.AdvanceLogger("separate_process")}
+    class_loggers = {"separate_process": advancedlogging.AdvancedLogger("separate_process")}
 
     # Construction/Destruction
     def __init__(self, target=None, name=None, daemon=False, init=False, kwargs={}):
@@ -1398,9 +1398,9 @@ class SeparateProcess(advancelogging.ObjectInheritor, advancelogging.ObjectWithL
             self.process.close()
 
 
-class ProcessingUnit(advancelogging.ObjectInheritor, advancelogging.ObjectWithLogging):
+class ProcessingUnit(advancedlogging.ObjectInheritor, advancedlogging.ObjectWithLogging):
     _attributes_as_parents = ["_task_object"]
-    class_loggers = {"processor_root": advancelogging.AdvanceLogger("processor_root")}
+    class_loggers = {"processor_root": advancedlogging.AdvancedLogger("processor_root")}
     DEFAULT_TASK = Task
 
     # Construction/Destruction
