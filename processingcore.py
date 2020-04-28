@@ -135,10 +135,13 @@ class AdvanceLogger(ObjectInheritor):
         out_dict["level"] = self.getEffectiveLevel()
         out_dict["propagate"] = self.propagate
         out_dict["filters"] = copy.deepcopy(self.filters)
+        out_dict["handlers"] = []
         for handler in self.handlers:
-            del handler.__dict__["lock"]
-            del handler.__dict__["stream"]
+            lock = handler.__dict__.pop("lock")
+            stream = handler.__dict__.pop("stream")
             out_dict["handlers"].append(copy.deepcopy(handler))
+            handler.__dict__["lock"] = lock
+            handler.__dict__["stream"] = stream
         return out_dict
 
     def __setstate__(self, in_dict):
