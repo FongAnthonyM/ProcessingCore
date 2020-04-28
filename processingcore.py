@@ -1221,7 +1221,7 @@ class Task(ObjectWithLogging):
 
 
 class MultiUnitTask(Task):
-    super().class_loggers["test"] = AdvanceLogger("test")
+    #class_loggers = Task.class_loggers.copy().update({"test": AdvanceLogger("test")})
     SETTING_NAMES = {"unit", "start", "setup", "closure", "s_kwargs", "t_kwargs", "c_kwargs"}
 
     # Construction/Destruction
@@ -1881,11 +1881,13 @@ class ProcessingUnit(ObjectInheritor, ObjectWithLogging):
         return None
 
     def stop(self, join=True, timeout=None):
+        self.loggers["processor_root"].debug(self.traceback_formatting("stop", "Stopping process", self.name))
         self._task_object.stop()
         if join:
             self.join(timeout=timeout)
 
     async def stop_async(self, join=True, timeout=None, interval=0.0):
+        self.loggers["processor_root"].debug(self.traceback_formatting("stop", "Stopping process asynchronously", self.name))
         self._task_object.stop()
         if join:
             await self.join_async(timeout=timeout, interval=interval)
@@ -1933,9 +1935,16 @@ class ProcessingCluster(ProcessingUnit):
 
     # Execution
     def stop(self, join=True, timeout=None):
+        self.loggers["processor_root"].debug(self.traceback_formatting("stop", "Stopping process", self.name))
         self._task_object.stop(join=join, timeout=timeout)
         if join:
             self.join(timeout=timeout)
+
+    async def stop_async(self, join=True, timeout=None, interval=0.0):
+        self.loggers["processor_root"].debug(self.traceback_formatting("stop", "Stopping process asynchronously", self.name))
+        self._task_object.stop(join=join, timeout=timeout)
+        if join:
+            await self.join_async(timeout=timeout, interval=interval)
 
 
 # Functions #
