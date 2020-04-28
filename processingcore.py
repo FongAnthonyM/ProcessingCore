@@ -19,6 +19,7 @@ import copy
 import datetime
 import logging
 import logging.config
+import logging.handlers
 import multiprocessing
 from multiprocessing import Process, Pool, Lock, Event, Queue, Pipe
 import queue
@@ -127,20 +128,25 @@ class AdvanceLogger(ObjectInheritor):
         return self.name.rsplit('.', 1)[0]
 
     # Todo: May need Pickling for multiprocessing
-        # Pickling
+    # Pickling
     def __getstate__(self):
         out_dict = self.__dict__
+        out_dict["disabled"] = self.disabled
         out_dict["level"] = self.getEffectiveLevel()
         out_dict["propagate"] = self.propagate
-        out_dict["handlers"] = self.handlers.copy
-        out_dict["filters"] = self.filters.copy
+        out_dict["filters"] = copy.deepcopy(self.filters)
+        for handler in self.handlers:
+            del handler.__dict__["lock"]
+            del handler.__dict__["stream"]
+            out_dict["handlers"].append(copy.deepcopy(handler))
         return out_dict
 
     def __setstate__(self, in_dict):
+        in_dict["_logger"].disabled = in_dict.pop("disabled")
         in_dict["_logger"].setLevel(in_dict.pop("level"))
         in_dict["_logger"].propagate = in_dict.pop("propagate")
-        in_dict["_logger"].handers = in_dict.pop("handlers")
-        in_dict["_logger"].handers = in_dict.pop("filters")
+        in_dict["_logger"].filters = in_dict.pop("filters")
+        in_dict["_logger"].handlers = _rebuild_handlers(in_dict.pop("handlers"))
         self.__dict__ = in_dict
 
     # Constructors/Destructors
@@ -230,6 +236,41 @@ class ObjectWithLogging(abc.ABC):
     # Logging
     def traceback_formatting(self, func, msg, name=""):
         return "%s(%s) -> %s: %s" % (self.__class__, name, func, msg)
+
+
+def _rebuild_handlers(handlers):
+    new_handlers = []
+    for handler in handlers:
+        if isinstance(handler, logging.handlers.QueueHandler):
+            kwargs = {"queue", handler.queue}
+        elif isinstance(handler, logging.handlers.BufferingHandler):
+            kwargs = {"capacity": handlers.capacity}
+        elif isinstance(handler, logging.handlers.HTTPHandler):
+            kwargs = {"host": handler.host, "url": handler.url, "method": handler.method, "secure": handler.secure,
+                      "credentials": handler.credentials, "context": handler.context}
+        elif isinstance(handler, logging.handlers.NTEventLogHandler):
+            kwargs = {"appname": handler.appname, "dllname": handler.dllname, "logtype": handler.logtype}
+        elif isinstance(handler, logging.handlers.SMTPHandler):
+            kwargs = {"mailhost": handler.mailhost, "fromaddr": handler.fromaddr, "toaddrs": handler.toaddrs,
+                      "subject": handler.subject, "credentials": handler.credentials, "secure": handler.secure,
+                      "timeout": handler.timeout}
+        elif isinstance(handler, logging.handlers.SysLogHandler):
+            kwargs = {"address": handler.address, "facility": handler.facility, "socktype": handler.socktype}
+        elif isinstance(handler, logging.handlers.SocketHandler):
+            kwargs = {"host": handler.host, "port":handler.port}
+        elif isinstance(handler, logging.FileHandler):
+            kwargs = {"filename": handler.baseFilename, "mode": handler.mode,
+                      "encoding": handler.encoding, "delay": handler.delay}
+        elif isinstance(handler, logging.StreamHandler):
+            kwargs = {}
+            warnings.warn("StreamHandler stream cannot be pickled, using default stream")
+        else:
+            warnings.warn()
+            continue
+        new_handler = type(handler)(**kwargs)
+        new_handler.__dict__.update(handler.__dict__)
+        new_handlers.append(new_handler)
+    return new_handlers
 
 
 class Interrupt(object):
@@ -989,7 +1030,7 @@ class Task(ObjectWithLogging):
 
     # Pickling
     def __getstate__(self):
-        out_dict = self.__dict__
+        out_dict = self.__dict__.copy()
         del out_dict["async_loop"]
         return out_dict
 
