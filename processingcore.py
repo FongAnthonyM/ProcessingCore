@@ -127,10 +127,9 @@ class AdvanceLogger(ObjectInheritor):
     def name_stem(self):
         return self.name.rsplit('.', 1)[0]
 
-    # Todo: May need Pickling for multiprocessing
     # Pickling
     def __getstate__(self):
-        out_dict = self.__dict__
+        out_dict = self.__dict__.copy()
         out_dict["disabled"] = self.disabled
         out_dict["level"] = self.getEffectiveLevel()
         out_dict["propagate"] = self.propagate
@@ -260,13 +259,13 @@ def _rebuild_handlers(handlers):
         elif isinstance(handler, logging.handlers.SysLogHandler):
             kwargs = {"address": handler.address, "facility": handler.facility, "socktype": handler.socktype}
         elif isinstance(handler, logging.handlers.SocketHandler):
-            kwargs = {"host": handler.host, "port":handler.port}
+            kwargs = {"host": handler.host, "port": handler.port}
         elif isinstance(handler, logging.FileHandler):
             kwargs = {"filename": handler.baseFilename, "mode": handler.mode,
                       "encoding": handler.encoding, "delay": handler.delay}
         elif isinstance(handler, logging.StreamHandler):
             kwargs = {}
-            warnings.warn("StreamHandler stream cannot be pickled, using default stream")
+            # warnings.warn("StreamHandler stream cannot be pickled, using default stream")
         else:
             warnings.warn()
             continue
