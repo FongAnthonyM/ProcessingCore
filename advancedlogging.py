@@ -19,6 +19,8 @@ import datetime
 import logging
 import logging.config
 import logging.handlers
+import statistics
+import time
 import warnings
 
 # Downloaded Libraries #
@@ -108,7 +110,7 @@ class AdvancedLogger(ObjectInheritor):
         self.append_message = ""
 
         if init:
-            self.construct(obj)
+            self.construct(obj=obj)
 
     @property
     def name_parent(self):
@@ -149,8 +151,8 @@ class AdvancedLogger(ObjectInheritor):
         else:
             self._logger = logging.getLogger(obj)
 
-    # Logger Editing
-    def set_logger(self, logger):
+    # Base Logger Editing
+    def set_base_logger(self, logger):
         self._logger = logger
 
     def fileConfig(self, name, fname, defaults=None, disable_existing_loggers=True):
@@ -218,6 +220,71 @@ class AdvancedLogger(ObjectInheritor):
         if append or (append is None and self.allow_append):
             msg = self.append_message + msg
         self._logger.exception(msg, *args, **kwargs)
+
+
+# Todo: Add Performance Testing (logging?)
+class PerformanceLogger(AdvancedLogger):
+    default_timer = time.perf_counter
+
+    # Construction/Destruction
+    def __init__(self, timer=None, obj=None, module_of_class="(Not Given)", init=True):
+        super().__init__(obj=obj, module_of_class=module_of_class, init=False)
+        self.default_log_level = logging.INFO
+
+        self.timer = self.default_timer
+        self.marks = {}
+        self.pairs = {}
+
+        if init:
+            self.construct(timer=timer, obj=obj)
+
+    def construct(self, timer=None, obj=None):
+        super().construct(obj=obj)
+        if timer is not None:
+            self.timer = timer
+
+    def time_func(self, func, kwargs={}):
+        start = self.timer()
+        func(**kwargs)
+        stop = self.timer()
+        return stop - start
+
+    def mark(self, name):
+        self.marks[name] = self.timer()
+
+    def mark_difference(self, f_name, s_name):
+        return self.marks[f_name] - self.marks[s_name]
+
+    def pair_begin(self, type_, name=None):
+        if type_ not in self.pairs:
+            self.pairs[type_] = {}
+        if name is None:
+            name = len(self.pairs[type_])
+        self.pairs[type_][name] = {"beginning": self.timer(), "ending": None}
+
+    def pair_end(self, type_, name=None):
+        if name is None:
+            name = list(self.pairs[type_].keys())[0]
+        self.pairs[type_][name]["ending"] = self.timer()
+
+    def pair_difference(self, type_, name=None):
+        if name is None:
+            name = list(self.pairs[type_].keys())[0]
+        pair = self.pairs[type_][name]
+        return pair["ending"] - pair["beginning"]
+
+    def pair_average_difference(self, type_):
+        differences = []
+        for pair in self.pairs[type_].values():
+            differences.append(pair["ending"] - pair["beginning"])
+        return statistics.mean(differences), statistics.stdev(differences)
+
+    def log_pair_average_difference(self, type_, level=None):
+        if level is None:
+            level = self.default_log_level
+        mean, std = self.pair_average_difference(type_)
+        msg = None
+        self.log(level, msg)
 
 
 class ObjectWithLogging(abc.ABC):
